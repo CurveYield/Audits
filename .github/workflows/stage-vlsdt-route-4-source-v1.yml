@@ -1,0 +1,171 @@
+name: Stage vlSDT route 4 exact source v1
+
+on:
+  push:
+    branches:
+      - source-freeze/vlsdt-v18-9-router-claim-fixed-route-4-v1
+    paths:
+      - '.source-staging/vlsdt-route-4/STAGE-SOURCE-REQUEST-v1.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: stage-vlsdt-route-4-source-v1
+  cancel-in-progress: false
+
+jobs:
+  stage-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      BRANCH: source-freeze/vlsdt-v18-9-router-claim-fixed-route-4-v1
+      ARCHIVE_STEM: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(4)
+      ORIGINAL_ZIP: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(4).zip
+      EXPECTED_SHA256: 18ba0c39c30a741308b72102580d2e8a6e0832c8ef0ac04d027e4aea49e7f4ec
+      EXPECTED_SIZE: '705346'
+      EXPECTED_FILE_COUNT: '223'
+      EXPECTED_INTERNAL_ENTRIES: '222'
+      STAGING_ROOT: .source-staging/vlsdt-route-4
+    steps:
+      - name: Fetch exact staging branch without external actions
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+          test -f "$STAGING_ROOT/STAGE-SOURCE-REQUEST-v1.json"
+
+      - name: Reconstruct and verify untouched archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, json
+          import os
+          root = Path(os.environ['STAGING_ROOT'])
+          request = json.loads((root / 'STAGE-SOURCE-REQUEST-v1.json').read_text())
+          parts = sorted((root / 'archive-parts-v1').glob('part-*.b64'))
+          if request != {
+              'schemaVersion': 'curveyield-source-staging-request-v1',
+              'archiveStem': os.environ['ARCHIVE_STEM'],
+              'originalZip': os.environ['ORIGINAL_ZIP'],
+              'expectedSha256': os.environ['EXPECTED_SHA256'],
+              'expectedSizeBytes': int(os.environ['EXPECTED_SIZE']),
+              'partCount': len(parts),
+          }:
+              raise SystemExit('staging request mismatch')
+          if not parts:
+              raise SystemExit('archive parts missing')
+          encoded = ''.join(p.read_text().strip() for p in parts)
+          data = base64.b64decode(encoded, validate=True)
+          if len(data) != int(os.environ['EXPECTED_SIZE']):
+              raise SystemExit('archive size mismatch')
+          if hashlib.sha256(data).hexdigest() != os.environ['EXPECTED_SHA256']:
+              raise SystemExit('archive hash mismatch')
+          Path('/tmp/source.zip').write_bytes(data)
+          PY
+
+      - name: Safely extract exact bytes and build manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib, json, os, shutil, stat, zipfile
+          stem = os.environ['ARCHIVE_STEM']
+          original = os.environ['ORIGINAL_ZIP']
+          expected_count = int(os.environ['EXPECTED_FILE_COUNT'])
+          expected_internal = int(os.environ['EXPECTED_INTERNAL_ENTRIES'])
+          base = Path(stem)
+          zdir = base / f'(Z) {stem}'
+          udir = base / f'(U) {stem}'
+          zdir.mkdir(parents=True, exist_ok=True)
+          if udir.exists():
+              shutil.rmtree(udir)
+          udir.mkdir(parents=True)
+          archive = Path('/tmp/source.zip')
+          shutil.copyfile(archive, zdir / original)
+          with zipfile.ZipFile(archive) as z:
+              seen = set()
+              total = 0
+              for info in z.infolist():
+                  name = info.filename
+                  p = Path(name)
+                  mode = (info.external_attr >> 16) & 0xFFFF
+                  if name.startswith(('/', '\\')) or p.is_absolute() or '..' in p.parts:
+                      raise SystemExit(f'unsafe archive path: {name}')
+                  if name in seen:
+                      raise SystemExit(f'duplicate archive path: {name}')
+                  if stat.S_ISLNK(mode):
+                      raise SystemExit(f'symlink archive entry: {name}')
+                  seen.add(name)
+                  total += info.file_size
+                  if total > 100_000_000:
+                      raise SystemExit('archive expansion exceeds safety bound')
+              z.extractall(udir)
+          files = []
+          for p in sorted(udir.rglob('*')):
+              if p.is_file():
+                  data = p.read_bytes()
+                  files.append({
+                      'path': p.relative_to(udir).as_posix(),
+                      'sizeBytes': len(data),
+                      'sha256': hashlib.sha256(data).hexdigest(),
+                  })
+          if len(files) != expected_count:
+              raise SystemExit(f'extracted file count mismatch: {len(files)}')
+          roots = sorted({Path(f['path']).parts[0] for f in files})
+          if len(roots) != 1:
+              raise SystemExit(f'unexpected source roots: {roots}')
+          internal = udir / roots[0] / 'Source-Manifest-v18.sha256'
+          if not internal.is_file():
+              raise SystemExit('internal manifest missing')
+          checked = 0
+          for line in internal.read_text().splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              expected, rel = line.split(None, 1)
+              rel = rel.lstrip('*').removeprefix('./')
+              target = internal.parent / rel
+              if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != expected:
+                  raise SystemExit(f'internal manifest mismatch: {rel}')
+              checked += 1
+          if checked != expected_internal:
+              raise SystemExit(f'internal manifest count mismatch: {checked}')
+          manifest = {
+              'schemaVersion': 'curveyield-audit-source-staging-manifest-v1',
+              'archiveStem': stem,
+              'originalZip': original,
+              'archiveSha256': os.environ['EXPECTED_SHA256'],
+              'archiveSizeBytes': int(os.environ['EXPECTED_SIZE']),
+              'sourceRoot': roots[0],
+              'fileCount': len(files),
+              'internalManifest': f'{roots[0]}/Source-Manifest-v18.sha256',
+              'internalManifestEntryCount': checked,
+              'files': files,
+              'sourceBytesModified': False,
+              'compilationPerformed': False,
+              'dependencyDownloadPerformed': False,
+          }
+          (base / 'SOURCE-STAGING-MANIFEST-v1.json').write_text(json.dumps(manifest, indent=2) + '\n')
+          PY
+
+      - name: Commit repository-native source copy
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'CurveYield Deep Assurance Controller'
+          git config user.email 'deep-assurance@users.noreply.github.com'
+          git add -- "$ARCHIVE_STEM"
+          git diff --cached --quiet && { echo 'source already staged'; exit 0; }
+          git commit -m 'audit: stage exact vlSDT route 4 source bytes v1'
+          git push origin "HEAD:$BRANCH"
