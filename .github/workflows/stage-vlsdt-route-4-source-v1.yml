@@ -1,4 +1,4 @@
-name: Stage vlSDT route 4 exact source v1
+name: Stage vlSDT route 4 exact source v2
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: stage-vlsdt-route-4-source-v1
+  group: stage-vlsdt-route-4-source-v2
   cancel-in-progress: false
 
 jobs:
@@ -46,28 +46,54 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib, json
-          import os
+          import base64, hashlib, json, os, re
+
           root = Path(os.environ['STAGING_ROOT'])
           request = json.loads((root / 'STAGE-SOURCE-REQUEST-v1.json').read_text())
-          parts = sorted((root / 'archive-parts-v1').glob('part-*.b64'))
-          if request != {
+          chunks = sorted((root / 'archive-chunks-v1').glob('chunk-*.txt'))
+          expected_request = {
               'schemaVersion': 'curveyield-source-staging-request-v1',
               'archiveStem': os.environ['ARCHIVE_STEM'],
               'originalZip': os.environ['ORIGINAL_ZIP'],
               'expectedSha256': os.environ['EXPECTED_SHA256'],
               'expectedSizeBytes': int(os.environ['EXPECTED_SIZE']),
-              'partCount': len(parts),
-          }:
-              raise SystemExit('staging request mismatch')
-          if not parts:
-              raise SystemExit('archive parts missing')
-          encoded = ''.join(p.read_text().strip() for p in parts)
+              'chunkCount': len(chunks),
+          }
+          if request != expected_request:
+              raise SystemExit(f'staging request mismatch: {request!r}')
+          if not chunks:
+              raise SystemExit('archive chunks missing')
+
+          encoded_chunks = []
+          for position, chunk_path in enumerate(chunks):
+              lines = chunk_path.read_text().splitlines()
+              if len(lines) != 3:
+                  raise SystemExit(f'{chunk_path.name}: expected exactly three lines')
+              match = re.fullmatch(r'CHUNK ([0-9]{3}) LENGTH ([0-9]+) SHA256 ([0-9a-f]{64})', lines[0])
+              if match is None:
+                  raise SystemExit(f'{chunk_path.name}: invalid header')
+              index = int(match.group(1))
+              declared_length = int(match.group(2))
+              declared_hash = match.group(3)
+              if index != position or chunk_path.name != f'chunk-{position:03d}.txt':
+                  raise SystemExit(f'{chunk_path.name}: non-contiguous index')
+              encoded = lines[1]
+              if lines[2] != f'END CHUNK {position:03d}':
+                  raise SystemExit(f'{chunk_path.name}: invalid footer')
+              if len(encoded) != declared_length:
+                  raise SystemExit(f'{chunk_path.name}: length mismatch')
+              actual_hash = hashlib.sha256(encoded.encode()).hexdigest()
+              if actual_hash != declared_hash:
+                  raise SystemExit(f'{chunk_path.name}: hash mismatch {actual_hash}')
+              encoded_chunks.append(encoded)
+
+          encoded = ''.join(encoded_chunks)
           data = base64.b64decode(encoded, validate=True)
           if len(data) != int(os.environ['EXPECTED_SIZE']):
-              raise SystemExit('archive size mismatch')
-          if hashlib.sha256(data).hexdigest() != os.environ['EXPECTED_SHA256']:
-              raise SystemExit('archive hash mismatch')
+              raise SystemExit(f'archive size mismatch: {len(data)}')
+          actual_archive_hash = hashlib.sha256(data).hexdigest()
+          if actual_archive_hash != os.environ['EXPECTED_SHA256']:
+              raise SystemExit(f'archive hash mismatch: {actual_archive_hash}')
           Path('/tmp/source.zip').write_bytes(data)
           PY
 
@@ -78,6 +104,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import hashlib, json, os, shutil, stat, zipfile
+
           stem = os.environ['ARCHIVE_STEM']
           original = os.environ['ORIGINAL_ZIP']
           expected_count = int(os.environ['EXPECTED_FILE_COUNT'])
@@ -91,6 +118,7 @@ jobs:
           udir.mkdir(parents=True)
           archive = Path('/tmp/source.zip')
           shutil.copyfile(archive, zdir / original)
+
           with zipfile.ZipFile(archive) as z:
               seen = set()
               total = 0
@@ -109,6 +137,7 @@ jobs:
                   if total > 100_000_000:
                       raise SystemExit('archive expansion exceeds safety bound')
               z.extractall(udir)
+
           files = []
           for p in sorted(udir.rglob('*')):
               if p.is_file():
@@ -139,6 +168,7 @@ jobs:
               checked += 1
           if checked != expected_internal:
               raise SystemExit(f'internal manifest count mismatch: {checked}')
+
           manifest = {
               'schemaVersion': 'curveyield-audit-source-staging-manifest-v1',
               'archiveStem': stem,
