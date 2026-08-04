@@ -1,0 +1,44 @@
+{
+  "name": "curveyield-vlsdt-liquid-locker-v17-deployment",
+  "version": "17.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "test"
+  },
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "clean": "hardhat clean",
+    "keeper:proposal-participation": "node scripts/proposal-participation-keeper-v17.js",
+    "build:proposal-sync": "node scripts/build-proposal-sync-payload-v17.js",
+    "test:static-v17": "node scripts/static-v17-requirements.test.js",
+    "test:participation-transition-v17": "node scripts/participation-transition-v17.test.js",
+    "test:governance-active-deposit-v17": "node scripts/governance-active-deposit-v17.test.js",
+    "prepare:v17": "node scripts/prepare-workspace-v17.js",
+    "compile:v17": "hardhat --config hardhat.config-v17.js compile",
+    "test:static-deployment-v17": "node scripts/static-v17-deployment-package.test.js",
+    "preflight:anvil:v17": "node deployment-v17/preflight-anvil-v17.js config-mainnet-v17.json",
+    "deploy:configure:v17": "node deployment-v17/deploy-configure-v17.js config-mainnet-v17.json",
+    "verify:deployment:v17": "node deployment-v17/verify-deployment-v17.js config-mainnet-v17.json",
+    "handoff:propose:v17": "node deployment-v17/propose-handoff-v17.js config-mainnet-v17.json",
+    "handoff:accept:v17": "node deployment-v17/accept-handoff-v17.js config-mainnet-v17.json",
+    "check:js:v17": "node scripts/check-javascript-v17.js",
+    "check:package:v17": "node scripts/static-v17-requirements.test.js && node scripts/static-v17-deployment-package.test.js && node scripts/governance-active-deposit-v17.test.js && node scripts/participation-transition-v17.test.js && node scripts/check-javascript-v17.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "UNLICENSED",
+  "description": "CurveYield vlSDT Liquid Locker V17 source and Anvil deployment handoff package",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
+    "@nomicfoundation/hardhat-ethers": "3.1.3",
+    "@openzeppelin/contracts": "5.4.0",
+    "chai": "4.5.0",
+    "ethers": "6.17.0",
+    "hardhat": "2.29.0",
+    "mocha": "11.7.6",
+    "solc": "0.8.28"
+  },
+  "private": true
+}

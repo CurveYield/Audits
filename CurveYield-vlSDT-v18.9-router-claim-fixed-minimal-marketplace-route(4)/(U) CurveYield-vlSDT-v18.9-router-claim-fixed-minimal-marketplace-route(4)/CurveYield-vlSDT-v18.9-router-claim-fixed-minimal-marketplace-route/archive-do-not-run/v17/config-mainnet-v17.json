@@ -1,0 +1,56 @@
+{
+  "version": 17,
+  "network": "ethereum-mainnet",
+  "chainId": 1,
+  "finalOwner": "0x9f2B20A772246960810045905B7daccf960eE288",
+  "finalAdmin": "0x9f2B20A772246960810045905B7daccf960eE288",
+  "feeReceivers": {
+    "treasury": "0x9f2B20A772246960810045905B7daccf960eE288",
+    "admin": "0x9f2B20A772246960810045905B7daccf960eE288"
+  },
+  "stakeDao": {
+    "sdt": "0x73968b9a57c6E53d41345FD57a6E6ae27d6CDB2F",
+    "vlSdt": "0x94818A7baa7e9F5dC62ce4da1B52ef9a760b80B8",
+    "vlBoost": "0xaB05ca46d1c78CAbB051efFE35099714Cad2AddA",
+    "feeDistributor": "0xCa94395469a88E9cAC0D5E5e308910E298270d30",
+    "boostMarketplace": "0xbc38D256E559FEd3fA95A6cdC633C667283fb6b8"
+  },
+  "governanceToken": {
+    "name": "CurveYield Governance",
+    "symbol": "cyGOV"
+  },
+  "governanceStaking": {
+    "name": "Staked CurveYield Governance",
+    "symbol": "stcyGOV",
+    "initialWithdrawTaxBps": 0,
+    "initialWithdrawHoldTimeSeconds": 0,
+    "rewardTokens": [],
+    "notifiers": []
+  },
+  "boostEconomics": {
+    "minimumBoostStakingMultiplierWei": "2000000000000000000",
+    "maximumBoostStakingMultiplierWei": "10000000000000000000",
+    "merchantStandingReserveBps": 0,
+    "boostStakingStandingReserveBps": 0,
+    "daoBoostReleasedToModules": "0",
+    "merchantPaymentTokens": []
+  },
+  "emissions": {
+    "revenueStakingGovernancePerSecond": "0",
+    "boostStakingGovernancePerSecond": "0"
+  },
+  "compounder": {
+    "minimumMarketAdvantageBps": 0,
+    "keepers": [],
+    "sdtToCyvlSdtAdapter": null,
+    "rewardToSdtAdapters": {}
+  },
+  "deployment": {
+    "confirmations": 2,
+    "gasLimitMultiplierBps": 12000,
+    "anvilPort": 8545,
+    "anvilBalanceWei": "100000000000000000000",
+    "anvilBlockTimeSeconds": 0,
+    "anvilForkBlockNumber": null
+  }
+}

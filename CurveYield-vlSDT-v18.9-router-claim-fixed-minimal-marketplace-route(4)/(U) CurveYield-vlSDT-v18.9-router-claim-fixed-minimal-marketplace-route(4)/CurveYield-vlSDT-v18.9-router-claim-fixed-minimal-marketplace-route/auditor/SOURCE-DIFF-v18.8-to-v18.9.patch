@@ -1,0 +1,1185 @@
+diff -ruN a/contracts/CurveYieldCyGovYieldStaking.sol b/contracts/CurveYieldCyGovYieldStaking.sol
+--- a/contracts/CurveYieldCyGovYieldStaking.sol	2026-07-26 04:16:23.000000000 +0000
++++ b/contracts/CurveYieldCyGovYieldStaking.sol	2026-07-26 05:39:55.913175118 +0000
+@@ -10,11 +10,12 @@
+ 
+ /// @notice Stakes cyvlSDT for cyGOV-only yield with resource-backed emissions.
+ /// @dev User principal is represented by non-transferable shares. The principal index is reduced
+-/// lazily by a linear completed-day decay whenever a standard state-changing interaction occurs.
++/// lazily by an additive linear rate-seconds schedule whenever a standard state-changing interaction occurs.
+ contract CurveYieldCyGovYieldStaking is Ownable2Step, ReentrancyGuard {
+     using SafeERC20 for IERC20;
+ 
+     uint256 public constant BPS = 10_000;
++    uint256 public constant DECAY_DENOMINATOR = BPS * 1 days;
+     uint256 public constant INDEX_PRECISION = 1e27;
+     uint256 public constant TARGET_YIELD_PRECISION = 1e18;
+     uint256 public constant BACKING_DAYS = 30;
+@@ -49,6 +50,7 @@
+     uint8 public dailyDecayRate = uint8(DEFAULT_DAILY_DECAY_RATE);
+ 
+     uint256 public principalIndex = INDEX_PRECISION;
++    uint256 public cumulativeDecayUnits;
+     uint256 public totalShares;
+     uint256 public stakeEpoch;
+     uint64 public lastDecayCheckpoint;
+@@ -85,7 +87,7 @@
+     event Withdrawn(address indexed user, address indexed receiver, uint256 grossAmount, uint256 fee);
+     event RewardClaimed(address indexed user, address indexed receiver, uint256 amount);
+     event RewardsAccrued(uint256 amount, uint256 dailyRate, uint256 elapsed);
+-    event DecaySettled(uint256 completedDays, uint256 rate, uint256 amount);
++    event DecaySettled(uint256 elapsedSeconds, uint256 rate, uint256 amount);
+     event StakeEpochClosed(uint256 indexed epoch, uint256 finalRewardPerShare);
+     event TreasuryReceiverSet(address indexed oldReceiver, address indexed newReceiver);
+     event ConfigQueued(uint8 indexed configType, uint256 value, uint256 readyAt);
+@@ -371,19 +373,23 @@
+ 
+     function _checkpointGlobal() internal {
+         _topUpMintReserve();
+-        _accrueGlobalRewards();
+-        _applyDecay();
++        (uint256 elapsed, uint256 activeElapsed, uint256 beforeTotal, uint256 afterTotal) = _previewDecay();
++        _accrueGlobalRewards(activeElapsed, beforeTotal, afterTotal);
++        _applyDecay(elapsed, beforeTotal, afterTotal);
+         _topUpMintReserve();
+     }
+ 
+-    function _accrueGlobalRewards() internal {
+-        uint256 elapsed = block.timestamp - rewardLastUpdate;
++    /// @dev Integrates the target emission rate over the same additive linear principal path used
++    /// by decay settlement. This makes reward accrual independent of checkpoint frequency without
++    /// changing held-first funding, reservation consumption, or reserve top-up behavior.
++    function _accrueGlobalRewards(uint256 elapsed, uint256 beforeTotal, uint256 afterTotal) internal {
+         rewardLastUpdate = uint64(block.timestamp);
+         if (elapsed == 0 || totalShares == 0 || targetYield == 0 || maxMintRate == 0) return;
+ 
+-        uint256 dailyRate = currentDailyRewardRate();
+-        if (dailyRate == 0) return;
+-        uint256 reward = Math.mulDiv(dailyRate, elapsed, 1 days);
++        uint256 startDailyRate = Math.mulDiv(targetYield, beforeTotal, TARGET_YIELD_PRECISION);
++        uint256 endDailyRate = Math.mulDiv(targetYield, afterTotal, TARGET_YIELD_PRECISION);
++        uint256 cap = effectiveMaxMintRate();
++        uint256 reward = _integratedReward(startDailyRate, endDailyRate, cap, elapsed);
+         uint256 fundable = freeHeldCyGov() + lockedMintReserveAmount;
+         if (reward > fundable) reward = fundable;
+         if (reward == 0) return;
+@@ -402,46 +408,92 @@
+         uint256 scaled = reward * INDEX_PRECISION + rewardScaledRemainder;
+         rewardPerShareStored += scaled / totalShares;
+         rewardScaledRemainder = scaled % totalShares;
+-        emit RewardsAccrued(reward, dailyRate, elapsed);
++        emit RewardsAccrued(reward, Math.mulDiv(reward, 1 days, elapsed), elapsed);
+     }
+ 
+-    function _applyDecay() internal {
+-        uint256 completedDays = (block.timestamp - lastDecayCheckpoint) / 1 days;
+-        if (completedDays == 0) return;
+-        lastDecayCheckpoint = uint64(uint256(lastDecayCheckpoint) + completedDays * 1 days);
+-        if (totalShares == 0 || dailyDecayRate == 0) return;
++    /// @dev Exact integral for a linearly declining desired daily rate under a constant daily cap.
++    function _integratedReward(
++        uint256 startDailyRate,
++        uint256 endDailyRate,
++        uint256 cap,
++        uint256 elapsed
++    ) internal pure returns (uint256 reward) {
++        if (elapsed == 0 || cap == 0 || startDailyRate == 0) return 0;
++        if (endDailyRate > startDailyRate) endDailyRate = startDailyRate;
++
++        if (startDailyRate <= cap) {
++            return Math.mulDiv(startDailyRate + endDailyRate, elapsed, 2 days);
++        }
++        if (endDailyRate >= cap) return Math.mulDiv(cap, elapsed, 1 days);
++
++        uint256 decliningRange = startDailyRate - endDailyRate;
++        uint256 cappedElapsed = Math.mulDiv(elapsed, startDailyRate - cap, decliningRange);
++        uint256 uncappedElapsed = elapsed - cappedElapsed;
++        reward = Math.mulDiv(cap, cappedElapsed, 1 days);
++        reward += Math.mulDiv(cap + endDailyRate, uncappedElapsed, 2 days);
++    }
++
++    /// @dev Cumulative rate-seconds are applied against the epoch's original index. Checkpointing
++    /// daily or once after a year therefore produces the same principal for the same elapsed time.
++    function _previewDecay()
++        internal
++        view
++        returns (uint256 elapsed, uint256 activeElapsed, uint256 beforeTotal, uint256 afterTotal)
++    {
++        elapsed = block.timestamp - lastDecayCheckpoint;
++        activeElapsed = elapsed;
++        beforeTotal = totalStaked();
++        afterTotal = beforeTotal;
++        if (elapsed == 0 || totalShares == 0 || dailyDecayRate == 0 || beforeTotal == 0) {
++            return (elapsed, activeElapsed, beforeTotal, afterTotal);
++        }
++
++        uint256 rate = uint256(dailyDecayRate);
++        uint256 remainingUnits = DECAY_DENOMINATOR - cumulativeDecayUnits;
++        uint256 secondsToZero = (remainingUnits + rate - 1) / rate;
++        if (activeElapsed >= secondsToZero) {
++            activeElapsed = secondsToZero;
++            return (elapsed, activeElapsed, beforeTotal, 0);
++        }
++
++        uint256 newUnits = cumulativeDecayUnits + activeElapsed * rate;
++        uint256 newIndex = Math.mulDiv(
++            INDEX_PRECISION, DECAY_DENOMINATOR - newUnits, DECAY_DENOMINATOR
++        );
++        afterTotal = Math.mulDiv(totalShares, newIndex, INDEX_PRECISION);
++    }
+ 
+-        uint256 decayBps = completedDays * dailyDecayRate;
+-        uint256 beforeTotal = totalStaked();
+-        if (beforeTotal == 0) return;
++    function _applyDecay(uint256 elapsed, uint256 beforeTotal, uint256 afterTotal) internal {
++        if (elapsed == 0) return;
++        lastDecayCheckpoint = uint64(block.timestamp);
++        if (totalShares == 0 || dailyDecayRate == 0 || beforeTotal == 0) return;
+ 
+-        if (decayBps >= BPS) {
+-            _closeStakeEpoch(completedDays, beforeTotal);
++        uint256 newUnits = cumulativeDecayUnits + elapsed * uint256(dailyDecayRate);
++        if (newUnits >= DECAY_DENOMINATOR || afterTotal == 0) {
++            _closeStakeEpoch(elapsed, beforeTotal);
+             return;
+         }
+ 
+-        uint256 newIndex = Math.mulDiv(principalIndex, BPS - decayBps, BPS);
+-        uint256 afterTotal = Math.mulDiv(totalShares, newIndex, INDEX_PRECISION);
+-        if (newIndex == 0 || afterTotal == 0) {
+-            _closeStakeEpoch(completedDays, beforeTotal);
+-            return;
+-        }
++        cumulativeDecayUnits = newUnits;
++        principalIndex = Math.mulDiv(
++            INDEX_PRECISION, DECAY_DENOMINATOR - newUnits, DECAY_DENOMINATOR
++        );
+         uint256 decayAmount = beforeTotal - afterTotal;
+-        principalIndex = newIndex;
+         if (decayAmount != 0) CYVLSDT.safeTransfer(treasuryReceiver, decayAmount);
+-        emit DecaySettled(completedDays, dailyDecayRate, decayAmount);
++        emit DecaySettled(elapsed, dailyDecayRate, decayAmount);
+     }
+ 
+-    function _closeStakeEpoch(uint256 completedDays, uint256 principalToTreasury) internal {
++    function _closeStakeEpoch(uint256 elapsed, uint256 principalToTreasury) internal {
+         uint256 oldEpoch = stakeEpoch;
+         epochFinalRewardPerShare[oldEpoch] = rewardPerShareStored;
+         totalShares = 0;
+         principalIndex = INDEX_PRECISION;
++        cumulativeDecayUnits = 0;
+         rewardPerShareStored = 0;
+         rewardScaledRemainder = 0;
+         stakeEpoch = oldEpoch + 1;
+         CYVLSDT.safeTransfer(treasuryReceiver, principalToTreasury);
+-        emit DecaySettled(completedDays, dailyDecayRate, principalToTreasury);
++        emit DecaySettled(elapsed, dailyDecayRate, principalToTreasury);
+         emit StakeEpochClosed(oldEpoch, epochFinalRewardPerShare[oldEpoch]);
+     }
+ 
+@@ -502,9 +554,13 @@
+     function _previewRewardPerShare() internal view returns (uint256 preview) {
+         preview = rewardPerShareStored;
+         if (totalShares == 0 || targetYield == 0 || maxMintRate == 0) return preview;
+-        uint256 elapsed = block.timestamp - rewardLastUpdate;
+-        if (elapsed == 0) return preview;
+-        uint256 reward = Math.mulDiv(currentDailyRewardRate(), elapsed, 1 days);
++        (uint256 elapsed, uint256 activeElapsed, uint256 beforeTotal, uint256 afterTotal) = _previewDecay();
++        if (elapsed == 0 || activeElapsed == 0) return preview;
++        uint256 startDailyRate = Math.mulDiv(targetYield, beforeTotal, TARGET_YIELD_PRECISION);
++        uint256 endDailyRate = Math.mulDiv(targetYield, afterTotal, TARGET_YIELD_PRECISION);
++        uint256 reward = _integratedReward(
++            startDailyRate, endDailyRate, effectiveMaxMintRate(), activeElapsed
++        );
+         uint256 fundable = freeHeldCyGov() + lockedMintReserveAmount;
+         if (reward > fundable) reward = fundable;
+         if (reward == 0) return preview;
+diff -ruN a/contracts/CurveYieldRevenueStrategyV7.sol b/contracts/CurveYieldRevenueStrategyV7.sol
+--- a/contracts/CurveYieldRevenueStrategyV7.sol	2026-07-26 03:37:32.000000000 +0000
++++ b/contracts/CurveYieldRevenueStrategyV7.sol	2026-07-26 05:29:14.333162605 +0000
+@@ -46,6 +46,7 @@
+     uint16 public callFeeBps;
+     address public treasuryReceiver;
+     bool public harvestOnDeposit;
++    bool public retired;
+ 
+     error ZeroAddress();
+     error ZeroAmount();
+@@ -59,6 +60,7 @@
+     error UnpriceableReward(address token, uint256 amount);
+     error InsufficientOutput(uint256 minimum, uint256 actual);
+     error DistributorAlreadySet();
++    error StrategyAlreadyRetired();
+ 
+     event Deposit(uint256 amount);
+     event Withdraw(uint256 requested, uint256 sent, uint256 retainedFee);
+@@ -72,6 +74,7 @@
+     event CyGovDistributorSet(address indexed distributor);
+     event CyGovForwarded(uint256 amount);
+     event StrategyRetired(uint256 wantReturned);
++    event StrategyEmergencyRetired(uint256 wantReturned);
+ 
+     constructor(
+         address initialOwner_,
+@@ -269,17 +272,26 @@
+         amount = _claimCyGov(distributor);
+     }
+ 
++    /// @notice Canonical migration path. All ordinary rewards must claim, convert, and compound or
++    /// the retirement reverts, preventing rewards from remaining assigned to an obsolete strategy.
+     function retireStrat() external override onlyVault nonReentrant {
++        if (retired) revert StrategyAlreadyRetired();
++        _harvest(address(0));
+         address distributor = cyGovDistributor;
+         if (distributor != address(0)) _claimCyGov(distributor);
+-
+-        uint256 active = REVENUE_STAKING.activeBalance(address(this));
+-        if (active != 0) REVENUE_STAKING.withdrawImmediate(active, address(this));
+-        uint256 returned = WANT.balanceOf(address(this));
+-        if (returned != 0) WANT.safeTransfer(vault, returned);
++        uint256 returned = _retirePrincipal();
+         emit StrategyRetired(returned);
+     }
+ 
++    /// @notice Emergency migration path used only when harvesting is broken. Reward claims are
++    /// deliberately skipped so principal can still exit. The strategy is permanently paused first,
++    /// preventing later public harvests from restaking funds under the obsolete strategy.
++    function retireStratEmergency() external override onlyVault nonReentrant {
++        if (retired) revert StrategyAlreadyRetired();
++        uint256 returned = _retirePrincipal();
++        emit StrategyEmergencyRetired(returned);
++    }
++
+     function panic() external onlyOwner nonReentrant {
+         _pause();
+         uint256 active = REVENUE_STAKING.activeBalance(address(this));
+@@ -291,10 +303,21 @@
+     }
+ 
+     function unpause() external onlyOwner {
++        if (retired) revert StrategyAlreadyRetired();
+         _unpause();
+         _depositIdle();
+     }
+ 
++
++    function _retirePrincipal() internal returns (uint256 returned) {
++        retired = true;
++        if (!paused()) _pause();
++        uint256 active = REVENUE_STAKING.activeBalance(address(this));
++        if (active != 0) REVENUE_STAKING.withdrawImmediate(active, address(this));
++        returned = WANT.balanceOf(address(this));
++        if (returned != 0) WANT.safeTransfer(vault, returned);
++    }
++
+     function _harvest(address callFeeRecipient) internal returns (uint256 grossWant) {
+         uint256 beforeWant = WANT.balanceOf(address(this));
+         REVENUE_STAKING.claimRewards(address(this));
+diff -ruN a/contracts/CurveYieldRevenueVaultV7.sol b/contracts/CurveYieldRevenueVaultV7.sol
+--- a/contracts/CurveYieldRevenueVaultV7.sol	2026-07-26 02:43:33.000000000 +0000
++++ b/contracts/CurveYieldRevenueVaultV7.sol	2026-07-26 05:29:14.333162605 +0000
+@@ -41,6 +41,7 @@
+ 
+     event NewStratCandidate(address implementation);
+     event UpgradeStrat(address implementation);
++    event EmergencyUpgradeStrat(address implementation);
+     event InitialConfigurationSet(address strategy, address distributor);
+     event Deposit(address indexed user, uint256 assets, uint256 shares, bool strictHarvest);
+     event Withdraw(address indexed user, uint256 shares, uint256 assets);
+@@ -167,12 +168,27 @@
+     }
+ 
+     function upgradeStrat() public onlyOwner {
++        _upgradeStrat(false);
++    }
++
++    /// @notice Uses the same candidate validation and seven-day delay as a normal upgrade, but
++    /// permits migration when the old strategy's reward harvest is broken.
++    function emergencyUpgradeStrat() external onlyOwner {
++        _upgradeStrat(true);
++    }
++
++    function _upgradeStrat(bool emergency) internal {
+         address implementation = stratCandidate.implementation;
+         if (implementation == address(0)) revert NoCandidate();
+         if (block.timestamp <= stratCandidate.proposedTime + approvalDelay) revert ApprovalDelayNotPassed();
+ 
+-        emit UpgradeStrat(implementation);
+-        strategy.retireStrat();
++        if (emergency) {
++            emit EmergencyUpgradeStrat(implementation);
++            strategy.retireStratEmergency();
++        } else {
++            emit UpgradeStrat(implementation);
++            strategy.retireStrat();
++        }
+         strategy = ICurveYieldRevenueStrategyV7(implementation);
+         stratCandidate.implementation = address(0);
+         stratCandidate.proposedTime = 5_000_000_000;
+diff -ruN a/contracts/CurveYieldVlSDTRevenueStaking.sol b/contracts/CurveYieldVlSDTRevenueStaking.sol
+--- a/contracts/CurveYieldVlSDTRevenueStaking.sol	2026-07-26 03:57:37.000000000 +0000
++++ b/contracts/CurveYieldVlSDTRevenueStaking.sol	2026-07-26 05:29:14.833162615 +0000
+@@ -44,8 +44,8 @@
+     uint256 public constant REWARD_CYCLE_INTERVAL = 1 days;
+     uint256 public constant WITHDRAWAL_DELAY = 7 days;
+     uint256 public constant MAX_IMMEDIATE_WITHDRAW_FEE_BPS = 250;
+-    uint256 public constant EXCESS_TREASURY_BPS = 4_000;
+-    uint256 public constant EXCESS_ADMIN_BPS = 1_000;
++    uint256 public constant EXCESS_TREASURY_BPS = 3_300;
++    uint256 public constant EXCESS_ADMIN_BPS = 700;
+     uint256 public constant BPS = 10_000;
+     uint256 public constant PRECISION = 1e27;
+     uint256 public constant BASE_PRECISION = 1e18;
+diff -ruN a/contracts/interfaces/ICurveYieldRevenueStrategyV7.sol b/contracts/interfaces/ICurveYieldRevenueStrategyV7.sol
+--- a/contracts/interfaces/ICurveYieldRevenueStrategyV7.sol	2026-07-26 01:41:18.000000000 +0000
++++ b/contracts/interfaces/ICurveYieldRevenueStrategyV7.sol	2026-07-26 05:29:14.333162605 +0000
+@@ -9,6 +9,7 @@
+     function deposit() external;
+     function withdraw(uint256 amount) external;
+     function retireStrat() external;
++    function retireStratEmergency() external;
+     function balanceOf() external view returns (uint256);
+     function estimatedUnharvestedWant() external view returns (uint256);
+     function pendingCyGov() external view returns (uint256);
+diff -ruN a/scripts/check-beefy-revenue-vault-v18.js b/scripts/check-beefy-revenue-vault-v18.js
+--- a/scripts/check-beefy-revenue-vault-v18.js	2026-07-26 03:39:12.000000000 +0000
++++ b/scripts/check-beefy-revenue-vault-v18.js	2026-07-26 05:35:17.429169687 +0000
+@@ -22,6 +22,7 @@
+   "struct StratCandidate",
+   "function proposeStrat",
+   "function upgradeStrat",
++  "function emergencyUpgradeStrat",
+   "uint256 public constant approvalDelay = 7 days",
+   "function economicBalance",
+   "function depositWithStrictHarvest",
+@@ -33,6 +34,9 @@
+   "function beforeDepositStrict()",
+   "function estimatedUnharvestedWant()",
+   "function retireStrat()",
++  "function retireStratEmergency()",
++  "_harvest(address(0))",
++  "retired = true",
+   "function proposeConverter",
+   "function executeConverter",
+   "MAX_WITHDRAW_FEE_BPS = 100",
+@@ -84,10 +88,22 @@
+   "revenue staking immediate withdrawal fee mismatch",
+   "revenue strategy fee configuration mismatch",
+   "withdrawal fee cap is not 1%",
+-  "performance fee cap is not 9%"
++  "performance fee cap is not 9%",
++  "deployed revenue strategy is already retired"
+ ]);
++const migrationTests = read("test/v18/RevenueVaultV18.test.js");
++for (const text of [
++  "harvests and compounds ordinary rewards before normal strategy retirement",
++  "reverts normal migration when reward harvesting fails",
++  "emergency migration skips failed harvest",
++  "emergencyUpgradeStrat",
++  "StrategyAlreadyRetired"
++]) {
++  if (!migrationTests.includes(text)) throw new Error(`migration regression test missing: ${text}`);
++}
++
+ const config = JSON.parse(read("config-mainnet-v18.json"));
+-if (config.release !== "18.8") throw new Error("V18.8 config required");
++if (config.release !== "18.9") throw new Error("V18.9 config required");
+ if (config.revenueStakingConfig.immediateWithdrawFeeBps !== 50) {
+   throw new Error("Revenue Staking default immediate withdrawal fee must be 50 bps");
+ }
+@@ -97,7 +113,7 @@
+     || config.revenueVault.performanceFeeBps !== 390
+     || config.revenueVault.callFeeBps !== 10
+     || config.revenueVault.harvestOnDeposit !== true
+-) throw new Error("V18.8 revenue strategy defaults mismatch");
++) throw new Error("V18.9 revenue strategy defaults mismatch");
+ 
+ must("contracts/CurveYieldCyGovDistributor.sol", [
+   "contract CurveYieldCyGovDistributor",
+@@ -135,4 +151,4 @@
+ if (fs.existsSync(path.join(root, "contracts/CurveYieldSdtLockerConverter.sol"))) {
+   throw new Error("superseded SDT-only converter still exists in active contracts");
+ }
+-console.log("V18.8 Beefy revenue-vault and immediate converter-route static checks passed.");
++console.log("V18.9 Beefy revenue-vault and immediate converter-route static checks passed.");
+diff -ruN a/scripts/check-cygov-yield-staking-v18.js b/scripts/check-cygov-yield-staking-v18.js
+--- a/scripts/check-cygov-yield-staking-v18.js	2026-07-26 04:20:53.000000000 +0000
++++ b/scripts/check-cygov-yield-staking-v18.js	2026-07-26 05:39:55.913175118 +0000
+@@ -29,8 +29,9 @@
+   ["function claim(", "claim"],
+   ["function effectiveMaxMintRate", "effective rate view"],
+   ["function lockedMintReserve", "locked reserve view"],
+-  ["completedDays * dailyDecayRate", "linear decay"],
+-  ["newIndex == 0 || afterTotal == 0", "decay rounding extinction guard"],
++  ["DECAY_DENOMINATOR = BPS * 1 days", "rate-seconds decay denominator"],
++  ["cumulativeDecayUnits", "cumulative additive decay schedule"],
++  ["_integratedReward", "cadence-independent reward integration"],
+   ["CYVLSDT.safeTransfer(treasuryReceiver, fee)", "treasury withdrawal fee"],
+   ["CYVLSDT.safeTransfer(treasuryReceiver, decayAmount)", "treasury decay fee"],
+   ["freeHeldCyGov()", "free held accounting"],
+@@ -62,7 +63,7 @@
+ forbid(revenue, "adminFeeReceiver", "no separate revenue admin fee receiver");
+ 
+ const config = JSON.parse(read("config-mainnet-v18.json"));
+-if (config.release !== "18.8") throw new Error("release must be 18.8");
++if (config.release !== "18.9") throw new Error("release must be 18.9");
+ const alloc = config.governanceMinting.allocations;
+ const expected = {
+   revenueStaking: ["5000000000000000000000000000", 800],
+@@ -85,7 +86,7 @@
+ 
+ const lib = read("deployment-v18/lib-v18.js");
+ need(lib, '["cyGovYieldStaking", "CurveYieldCyGovYieldStaking"]', "deployable registry");
+-need(lib, 'c.release !== "18.8"', "V18.8 config validation");
++need(lib, 'c.release !== "18.9"', "V18.9 config validation");
+ need(lib, 'c.feeReceivers.treasury !== c.finalOwner', "Treasury receiver validation");
+ forbid(lib, 'feeReceivers.admin', "separate admin fee receiver config");
+ 
+@@ -107,6 +108,7 @@
+ const yieldTest = read(yieldTestPath);
+ need(yieldTest, "protects the first automatic reserve after held-only backing is consumed", "held-only transition regression test");
+ need(yieldTest, "protectedMintReservation(reservationId)", "protected reserve test assertion");
++need(yieldTest, "same linear decay and emissions with daily or annual checkpoints", "checkpoint cadence regression test");
+ 
+ const feeTestPath = "test/v18/RevenueBenchmarkFeesV18.test.js";
+ if (!fs.existsSync(path.join(root, feeTestPath))) throw new Error("missing Revenue benchmark executable test source");
+@@ -135,8 +137,42 @@
+ if (heldUsed !== oneDayReward || reserveUsed !== 0n) throw new Error("held-first reward funding model mismatch");
+ const principal = 1_000_000n;
+ const decayRate = 3n;
+-const completedDays = 10n;
+-const decay = principal * decayRate * completedDays / 10_000n;
+-if (decay !== 3_000n) throw new Error("linear decay model mismatch");
++const secondsPerDay = 86_400n;
++const annualUnits = 365n * secondsPerDay * decayRate;
++const annualRemaining = principal * (10_000n * secondsPerDay - annualUnits) / (10_000n * secondsPerDay);
++let dailyUnits = 0n;
++let dailyRemaining = principal;
++for (let day = 0n; day < 365n; ++day) {
++  dailyUnits += secondsPerDay * decayRate;
++  dailyRemaining = principal * (10_000n * secondsPerDay - dailyUnits) / (10_000n * secondsPerDay);
++}
++if (annualRemaining !== dailyRemaining || annualRemaining !== 890_500n) {
++  throw new Error(`checkpoint cadence changes linear decay: annual=${annualRemaining} daily=${dailyRemaining}`);
++}
++
++const maxRateDecay = 10n;
++const maxAnnualUnits = 365n * secondsPerDay * maxRateDecay;
++const maxAnnualRemaining = principal * (10_000n * secondsPerDay - maxAnnualUnits) / (10_000n * secondsPerDay);
++let maxDailyUnits = 0n;
++let maxDailyRemaining = principal;
++for (let day = 0n; day < 365n; ++day) {
++  maxDailyUnits += secondsPerDay * maxRateDecay;
++  maxDailyRemaining = principal * (10_000n * secondsPerDay - maxDailyUnits) / (10_000n * secondsPerDay);
++}
++if (maxAnnualRemaining !== maxDailyRemaining || maxAnnualRemaining !== 635_000n) {
++  throw new Error(`max-rate cadence mismatch: annual=${maxAnnualRemaining} daily=${maxDailyRemaining}`);
++}
++
++// Trapezoidal integration is additive for the same linear principal path.
++const startDailyReward = 1_000_000n;
++const endDailyReward = 635_000n;
++const annualReward = (startDailyReward + endDailyReward) * 365n / 2n;
++let dailyReward = 0n;
++for (let day = 0n; day < 365n; ++day) {
++  const start = startDailyReward - day * 1_000n;
++  const end = start - 1_000n;
++  dailyReward += (start + end) / 2n;
++}
++if (annualReward !== dailyReward) throw new Error("linear reward integration changes with checkpoint cadence");
+ 
+-console.log("V18.8 cyGOV Yield Staking, locked max-rate backing, allocations, Treasury routing, and sole admin-fee exception checks passed.");
++console.log("V18.9 cyGOV Yield Staking, locked max-rate backing, allocations, Treasury routing, and sole admin-fee exception checks passed.");
+diff -ruN a/scripts/check-governance-mint-controls-v18.js b/scripts/check-governance-mint-controls-v18.js
+--- a/scripts/check-governance-mint-controls-v18.js	2026-07-26 03:39:01.000000000 +0000
++++ b/scripts/check-governance-mint-controls-v18.js	2026-07-26 05:32:22.805166281 +0000
+@@ -71,7 +71,7 @@
+ }
+ 
+ const config = JSON.parse(read("config-mainnet-v18.json"));
+-if (config.version !== 18 || config.release !== "18.8") throw new Error("V18.8 config metadata mismatch");
++if (config.version !== 18 || config.release !== "18.9") throw new Error("V18.9 config metadata mismatch");
+ if (config.governanceMinting.minimumAllocationBps !== 3000) throw new Error("minimum allocation config mismatch");
+ if (config.governanceMinting.allocationChangeDelaySeconds !== 1209600) throw new Error("allocation delay config mismatch");
+ 
+@@ -94,4 +94,4 @@
+   throw new Error("allocation changes still use the obsolete blanket active-reservation prohibition");
+ }
+ 
+-console.log("V18.8 governance unlock, adjustable quota, reservation, and external mint-controller checks passed.");
++console.log("V18.9 governance unlock, adjustable quota, reservation, and external mint-controller checks passed.");
+diff -ruN a/scripts/check-mint-schedule-math-v18.js b/scripts/check-mint-schedule-math-v18.js
+--- a/scripts/check-mint-schedule-math-v18.js	2026-07-26 03:39:01.000000000 +0000
++++ b/scripts/check-mint-schedule-math-v18.js	2026-07-26 05:36:24.497170995 +0000
+@@ -45,4 +45,4 @@
+   throw new Error("4B floor mismatch");
+ }
+ 
+-console.log("V18.8 mint schedule math passed: cap reached in month 121.");
++console.log("V18.9 mint schedule math passed: cap reached in month 121.");
+diff -ruN a/scripts/check-revenue-benchmark-fees-v18.js b/scripts/check-revenue-benchmark-fees-v18.js
+--- a/scripts/check-revenue-benchmark-fees-v18.js	2026-07-26 03:57:20.000000000 +0000
++++ b/scripts/check-revenue-benchmark-fees-v18.js	2026-07-26 05:35:17.429169687 +0000
+@@ -13,8 +13,8 @@
+   if (source.includes(text)) throw new Error(`${label}: forbidden ${text}`);
+ }
+ 
+-need("EXCESS_TREASURY_BPS = 4_000", "40% Treasury fee over benchmark");
+-need("EXCESS_ADMIN_BPS = 1_000", "10% admin fee over benchmark");
++need("EXCESS_TREASURY_BPS = 3_300", "33% Treasury fee over benchmark");
++need("EXCESS_ADMIN_BPS = 700", "7% admin fee over benchmark");
+ need("Math.mulDiv(excess, EXCESS_TREASURY_BPS, BPS)", "Treasury excess split");
+ need("Math.mulDiv(excess, EXCESS_ADMIN_BPS, BPS)", "admin excess split");
+ need("IERC20(token).safeTransfer(treasuryReceiver, treasuryAmount)", "Treasury fee receiver");
+@@ -25,10 +25,16 @@
+ forbid("EXCESS_ADMIN_BPS = 1_200", "obsolete 12% admin excess fee");
+ forbid("adminFeeReceiver", "separate admin fee receiver; fee follows admin role");
+ 
++
++const verifier = fs.readFileSync(path.join(root, "deployment-v18/verify-deployment-v18.js"), "utf8");
++if (!verifier.includes("revenue staking benchmark fee split mismatch")) {
++  throw new Error("deployment verifier does not enforce the 33%/7% benchmark split");
++}
++
+ const BPS = 10_000n;
+-const treasuryBps = 4_000n;
+-const adminBps = 1_000n;
+-if (treasuryBps + adminBps !== 5_000n) throw new Error("excess fee total must be exactly 50%");
++const treasuryBps = 3_300n;
++const adminBps = 700n;
++if (treasuryBps + adminBps !== 4_000n) throw new Error("excess fee total must be exactly 40%");
+ 
+ // Model a reward where 500 is represented benchmark yield: 400 active + 100 queued.
+ const amount = 1_000n;
+@@ -38,9 +44,9 @@
+ const treasuryAmount = baseQueued + excess * treasuryBps / BPS;
+ const adminAmount = excess * adminBps / BPS;
+ const userAmount = amount - treasuryAmount - adminAmount;
+-if (treasuryAmount !== 300n || adminAmount !== 50n || userAmount !== 650n) {
++if (treasuryAmount !== 265n || adminAmount !== 35n || userAmount !== 700n) {
+   throw new Error(`benchmark split model mismatch: user=${userAmount} treasury=${treasuryAmount} admin=${adminAmount}`);
+ }
+ if (userAmount + treasuryAmount + adminAmount !== amount) throw new Error("benchmark split does not conserve rewards");
+ 
+-console.log("V18.8 Revenue Staking benchmark split passed: 40% Treasury + 10% admin-role fee on excess; admin is the sole non-Treasury fee.");
++console.log("V18.9 Revenue Staking benchmark split passed: 33% Treasury + 7% admin-role fee on excess; admin is the sole non-Treasury fee.");
+diff -ruN a/scripts/check-source-layout-v18.js b/scripts/check-source-layout-v18.js
+--- a/scripts/check-source-layout-v18.js	2026-07-26 03:39:01.000000000 +0000
++++ b/scripts/check-source-layout-v18.js	2026-07-26 05:36:24.497170995 +0000
+@@ -164,4 +164,4 @@
+   if (!cyGovDistributor.includes(fragment)) fail(`cyGOV distributor source missing: ${fragment}`);
+ }
+ 
+-console.log("V18.8 active source layout and architecture checks passed.");
++console.log("V18.9 active source layout and architecture checks passed.");
+diff -ruN a/deployment-v18/lib-v18.js b/deployment-v18/lib-v18.js
+--- a/deployment-v18/lib-v18.js	2026-07-26 04:04:04.000000000 +0000
++++ b/deployment-v18/lib-v18.js	2026-07-26 05:32:22.805166281 +0000
+@@ -62,8 +62,8 @@
+ function loadConfig(configPath) {
+   const resolved = path.resolve(configPath || path.join(ROOT, "config-mainnet-v18.json"));
+   const c = readJson(resolved);
+-  if (c.version !== 18 || c.release !== "18.8" || c.chainId !== 1) {
+-    throw new Error("V18.8 Ethereum-mainnet config required");
++  if (c.version !== 18 || c.release !== "18.9" || c.chainId !== 1) {
++    throw new Error("V18.9 Ethereum-mainnet config required");
+   }
+ 
+   c.finalOwner = requireAddress("finalOwner", c.finalOwner);
+@@ -192,7 +192,7 @@
+       10000
+     );
+     if (initialCap !== expected.initialCap || additionalBps !== expected.additionalBps) {
+-      throw new Error(`governanceMinting.allocations.${key} does not match the approved V18.8 original quota`);
++      throw new Error(`governanceMinting.allocations.${key} does not match the approved V18.9 original quota`);
+     }
+     totalInitial += initialCap;
+     totalAdditionalBps += additionalBps;
+diff -ruN a/deployment-v18/verify-deployment-v18.js b/deployment-v18/verify-deployment-v18.js
+--- a/deployment-v18/verify-deployment-v18.js	2026-07-26 04:21:05.000000000 +0000
++++ b/deployment-v18/verify-deployment-v18.js	2026-07-26 05:35:17.425169687 +0000
+@@ -110,6 +110,12 @@
+   if (Number(await revenueStaking.immediateWithdrawFeeBps()) !== c.revenueStakingConfig.immediateWithdrawFeeBps) {
+     throw new Error("revenue staking immediate withdrawal fee mismatch");
+   }
++  if (
++    (await revenueStaking.EXCESS_TREASURY_BPS()) !== 3300n
++      || (await revenueStaking.EXCESS_ADMIN_BPS()) !== 700n
++  ) {
++    throw new Error("revenue staking benchmark fee split mismatch");
++  }
+   eq(await cyGovYieldStaking.CYVLSDT(), await cyvlSdt.getAddress(), "cyGOV Yield Staking asset");
+   eq(
+     await cyGovYieldStaking.GOVERNANCE_TOKEN(),
+@@ -157,6 +163,7 @@
+   eq(await revenueStrategy.want(), await cyvlSdt.getAddress(), "revenue strategy want");
+   eq(await revenueStrategy.CONVERTER(), await revenueConverter.getAddress(), "revenue strategy converter");
+   eq(await revenueStrategy.cyGovDistributor(), await cyGovDistributor.getAddress(), "strategy cyGOV distributor");
++  if (await revenueStrategy.retired()) throw new Error("deployed revenue strategy is already retired");
+   eq(await cyGovDistributor.vault(), await revenueVault.getAddress(), "cyGOV distributor vault");
+   eq(await revenueConverter.outputToken(), await cyvlSdt.getAddress(), "converter output token");
+   if (!(await revenueConverter.supportsToken(c.stakeDao.sdt))) {
+@@ -316,7 +323,7 @@
+ 
+   const report = {
+     version: 18,
+-    release: c.release || "18.8",
++    release: c.release || "18.9",
+     chainId: String((await ctx.provider.getNetwork()).chainId),
+     expectedOwner,
+     deployer: ctx.wallet.address,
+diff -ruN a/test/v18/CyGovYieldStakingV18.test.js b/test/v18/CyGovYieldStakingV18.test.js
+--- a/test/v18/CyGovYieldStakingV18.test.js	2026-07-26 04:16:51.000000000 +0000
++++ b/test/v18/CyGovYieldStakingV18.test.js	2026-07-26 05:39:55.913175118 +0000
+@@ -43,7 +43,7 @@
+   await ctx.yieldStaking.connect(ctx.alice).stake(amount);
+ }
+ 
+-describe("CurveYield cyGOV Yield Staking V18.8", function () {
++describe("CurveYield cyGOV Yield Staking V18.9", function () {
+   it("locks thirty days of protected backing for maxMintRate", async function () {
+     const ctx = await fixture();
+     const dailyRate = B / 2n;
+@@ -101,7 +101,7 @@
+     ).to.be.revertedWithCustomError(ctx.governanceToken, "InvalidMintReservation");
+   });
+ 
+-  it("settles completed-day decay linearly and sends it to Treasury", async function () {
++  it("settles elapsed-time decay linearly and sends it to Treasury", async function () {
+     const ctx = await fixture();
+     await stake(ctx, 1_000n * E18);
+ 
+@@ -113,6 +113,39 @@
+     expect(await ctx.yieldStaking.balanceOf(ctx.alice.address)).to.equal(997n * E18);
+   });
+ 
++
++  it("produces the same linear decay and emissions with daily or annual checkpoints", async function () {
++    const ctx = await fixture();
++    await ctx.yieldStaking.setDailyDecayRate(10);
++    await ctx.yieldStaking.mintInitialInventory(1_000_000n * E18);
++    await ctx.yieldStaking.setTargetYield(E18);
++    await ctx.yieldStaking.setMaxMintRate(10_000n * E18);
++    await stake(ctx, 1_000n * E18);
++
++    const start = await ctx.yieldStaking.lastDecayCheckpoint();
++    const snapshot = await ethers.provider.send("evm_snapshot", []);
++
++    await setNextTimestamp(start + BigInt(365 * DAY));
++    await ctx.yieldStaking.connect(ctx.alice).checkpoint();
++    const annualPrincipal = await ctx.yieldStaking.balanceOf(ctx.alice.address);
++    const annualTreasury = await ctx.cyvlSdt.balanceOf(ctx.treasury.address);
++    const annualRewards = await ctx.yieldStaking.totalRewardLiability();
++
++    await ethers.provider.send("evm_revert", [snapshot]);
++    for (let day = 1; day <= 365; ++day) {
++      await setNextTimestamp(start + BigInt(day * DAY));
++      await ctx.yieldStaking.connect(ctx.alice).checkpoint();
++    }
++    const dailyPrincipal = await ctx.yieldStaking.balanceOf(ctx.alice.address);
++    const dailyTreasury = await ctx.cyvlSdt.balanceOf(ctx.treasury.address);
++    const dailyRewards = await ctx.yieldStaking.totalRewardLiability();
++
++    expect(annualPrincipal).to.equal(635n * E18);
++    expect(dailyPrincipal).to.equal(annualPrincipal);
++    expect(dailyTreasury).to.equal(annualTreasury);
++    expect(dailyRewards).to.equal(annualRewards);
++  });
++
+   it("charges the initial two-percent withdrawal fee to Treasury", async function () {
+     const ctx = await fixture();
+     await ctx.yieldStaking.setDailyDecayRate(0);
+diff -ruN a/test/v18/GovernanceMintControlsV18.test.js b/test/v18/GovernanceMintControlsV18.test.js
+--- a/test/v18/GovernanceMintControlsV18.test.js	2026-07-26 04:10:53.000000000 +0000
++++ b/test/v18/GovernanceMintControlsV18.test.js	2026-07-26 05:39:55.913175118 +0000
+@@ -92,7 +92,7 @@
+   };
+ }
+ 
+-describe("CurveYield V18.8 governance mint controls", function () {
++describe("CurveYield V18.9 governance mint controls", function () {
+   it("implements the approved unlock schedule and permanent 4B monthly floor", async function () {
+     const { governanceToken } = await deployCore();
+     expect(await governanceToken.unlockedSupply()).to.equal(200n * B);
+diff -ruN a/test/v18/RevenueBenchmarkFeesV18.test.js b/test/v18/RevenueBenchmarkFeesV18.test.js
+--- a/test/v18/RevenueBenchmarkFeesV18.test.js	2026-07-26 04:09:59.000000000 +0000
++++ b/test/v18/RevenueBenchmarkFeesV18.test.js	2026-07-26 05:39:55.913175118 +0000
+@@ -57,14 +57,14 @@
+   );
+ }
+ 
+-describe("CurveYield Revenue Staking V18.8 benchmark fees", function () {
+-  it("sends 40% of excess to Treasury and 10% only to the admin role", async function () {
++describe("CurveYield Revenue Staking V18.9 benchmark fees", function () {
++  it("sends 33% of excess to Treasury and 7% only to the admin role", async function () {
+     const ctx = await fixture();
+     await notifyBenchmarkReward(ctx);
+ 
+-    expect(await ctx.reward.balanceOf(ctx.treasury.address)).to.equal(300n * E18);
+-    expect(await ctx.reward.balanceOf(ctx.admin.address)).to.equal(50n * E18);
+-    expect(await ctx.reward.balanceOf(await ctx.revenueStaking.getAddress())).to.equal(650n * E18);
++    expect(await ctx.reward.balanceOf(ctx.treasury.address)).to.equal(265n * E18);
++    expect(await ctx.reward.balanceOf(ctx.admin.address)).to.equal(35n * E18);
++    expect(await ctx.reward.balanceOf(await ctx.revenueStaking.getAddress())).to.equal(635n * E18);
+   });
+ 
+   it("moves the sole non-Treasury fee destination when the admin role changes", async function () {
+@@ -74,8 +74,8 @@
+     await ctx.revenueStaking.connect(ctx.admin).setAdmin(ctx.nextAdmin.address);
+     await notifyBenchmarkReward(ctx);
+ 
+-    expect(await ctx.reward.balanceOf(ctx.admin.address)).to.equal(50n * E18);
+-    expect(await ctx.reward.balanceOf(ctx.nextAdmin.address)).to.equal(50n * E18);
+-    expect(await ctx.reward.balanceOf(ctx.treasury.address)).to.equal(600n * E18);
++    expect(await ctx.reward.balanceOf(ctx.admin.address)).to.equal(35n * E18);
++    expect(await ctx.reward.balanceOf(ctx.nextAdmin.address)).to.equal(35n * E18);
++    expect(await ctx.reward.balanceOf(ctx.treasury.address)).to.equal(530n * E18);
+   });
+ });
+diff -ruN a/test/v18/RevenueVaultV18.test.js b/test/v18/RevenueVaultV18.test.js
+--- a/test/v18/RevenueVaultV18.test.js	2026-07-26 04:08:05.000000000 +0000
++++ b/test/v18/RevenueVaultV18.test.js	2026-07-26 05:39:55.913175118 +0000
+@@ -182,8 +182,7 @@
+     expect(await ctx.converter.supportsToken(await usdc.getAddress())).to.equal(true);
+   });
+ 
+-  it("keeps the Beefy seven-day strategy replacement flow", async function () {
+-    const ctx = await fixture();
++  async function deployReplacement(ctx) {
+     const Strategy = await ethers.getContractFactory("CurveYieldRevenueStrategyV7");
+     const replacement = await Strategy.deploy(
+       ctx.dao.address,
+@@ -196,13 +195,61 @@
+       ctx.feeRecipient.address
+     );
+     await replacement.connect(ctx.dao).setCyGovDistributor(await ctx.distributor.getAddress());
++    return replacement;
++  }
+ 
++  async function matureCandidate(ctx, replacement) {
+     await ctx.vault.connect(ctx.dao).proposeStrat(await replacement.getAddress());
+     await ethers.provider.send("evm_increaseTime", [7 * 24 * 60 * 60 + 1]);
+     await ethers.provider.send("evm_mine", []);
++  }
++
++  it("harvests and compounds ordinary rewards before normal strategy retirement", async function () {
++    const ctx = await fixture();
++    const replacement = await deployReplacement(ctx);
++    await addSdtReward(ctx, ethers.parseEther("100"));
++    await matureCandidate(ctx, replacement);
++
+     await ctx.vault.connect(ctx.dao).upgradeStrat();
+ 
++    expect(await ctx.revenue.rewardEarned(await ctx.strategy.getAddress(), await ctx.sdt.getAddress())).to.equal(0);
++    expect(await ctx.strategy.retired()).to.equal(true);
++    expect(await ctx.strategy.paused()).to.equal(true);
+     expect(await ctx.vault.strategy()).to.equal(await replacement.getAddress());
+     expect(await ctx.revenue.activeBalance(await replacement.getAddress())).to.be.greaterThan(0);
+   });
++
++  it("reverts normal migration when reward harvesting fails", async function () {
++    const ctx = await fixture();
++    const replacement = await deployReplacement(ctx);
++    await matureCandidate(ctx, replacement);
++    await ctx.revenue.setClaimRewardsReverts(true);
++
++    await expect(ctx.vault.connect(ctx.dao).upgradeStrat()).to.be.revertedWith("claim revert");
++    expect(await ctx.vault.strategy()).to.equal(await ctx.strategy.getAddress());
++    expect(await ctx.strategy.retired()).to.equal(false);
++  });
++
++  it("emergency migration skips failed harvest, returns principal, and permanently pauses the old strategy", async function () {
++    const ctx = await fixture();
++    const replacement = await deployReplacement(ctx);
++    await matureCandidate(ctx, replacement);
++    await ctx.revenue.setClaimRewardsReverts(true);
++
++    await ctx.vault.connect(ctx.dao).emergencyUpgradeStrat();
++
++    expect(await ctx.vault.strategy()).to.equal(await replacement.getAddress());
++    expect(await ctx.revenue.activeBalance(await ctx.strategy.getAddress())).to.equal(0);
++    expect(await ctx.revenue.activeBalance(await replacement.getAddress())).to.be.greaterThan(0);
++    expect(await ctx.strategy.retired()).to.equal(true);
++    expect(await ctx.strategy.paused()).to.equal(true);
++    await expect(ctx.strategy.connect(ctx.caller).harvest()).to.be.revertedWithCustomError(
++      ctx.strategy,
++      "EnforcedPause"
++    );
++    await expect(ctx.strategy.connect(ctx.dao).unpause()).to.be.revertedWithCustomError(
++      ctx.strategy,
++      "StrategyAlreadyRetired"
++    );
++  });
+ });
+--- a/config-mainnet-v18.json	2026-07-26 04:04:04.000000000 +0000
++++ b/config-mainnet-v18.json	2026-07-26 05:32:22.805166281 +0000
+@@ -85,7 +85,7 @@
+       "periodicIntervalSeconds": 0
+     }
+   },
+-  "release": "18.8",
++  "release": "18.9",
+   "revenueStakingConfig": {
+     "immediateWithdrawFeeBps": 50
+   },
+--- a/package.json	2026-07-26 03:43:49.000000000 +0000
++++ b/package.json	2026-07-26 05:32:22.805166281 +0000
+@@ -1,9 +1,9 @@
+ {
+   "name": "curveyield-vlsdt-liquid-locker-v18-uncompiled",
+-  "version": "18.8.0",
++  "version": "18.9.0",
+   "private": true,
+   "license": "UNLICENSED",
+-  "description": "CurveYield vlSDT Liquid Locker V18.8 auditor handoff with cyGOV Yield Staking and locked emission backing",
++  "description": "CurveYield vlSDT Liquid Locker V18.9 auditor handoff with cyGOV Yield Staking and locked emission backing",
+   "scripts": {
+     "clean:v18": "hardhat clean",
+     "compile:v18": "hardhat compile",
+--- a/package-lock.json	2026-07-26 03:51:37.000000000 +0000
++++ b/package-lock.json	2026-07-26 05:36:24.497170995 +0000
+@@ -1,12 +1,12 @@
+ {
+   "name": "curveyield-vlsdt-liquid-locker-v18-uncompiled",
+-  "version": "18.8.0",
++  "version": "18.9.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "curveyield-vlsdt-liquid-locker-v18-uncompiled",
+-      "version": "18.8.0",
++      "version": "18.9.0",
+       "license": "UNLICENSED",
+       "devDependencies": {
+         "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
+--- a/README-v18.md	2026-07-26 04:21:43.000000000 +0000
++++ b/README-v18.md	2026-07-26 05:39:00.445174036 +0000
+@@ -1,81 +1,39 @@
+-# CurveYield vlSDT Liquid Locker V18.8 — Auditor Handoff (Uncompiled)
++# CurveYield vlSDT Liquid Locker V18.9 — Auditor Handoff (Uncompiled)
+ 
+-V18.8 adds a dedicated cyGOV Yield Staking module, revises governance-token allocations, routes every protocol fee to Treasury except Revenue Staking's admin-role fee, and changes Revenue Staking's yield-over-benchmark split to 40% Treasury plus 10% admin.
++V18.9 resolves the two V18.8 audit findings without changing cyGOV reward top-up, reservation, or funding behavior.
+ 
+-## Critical status
+-
+-This package has **not been compiled** by instruction. It has not received executable Solidity tests, exact runtime-bytecode measurement, fork simulation, deployment, or an independent security audit. Static checks are evidence only of source/package properties and cannot establish deployability or correctness.
+-
+-## New cyGOV Yield Staking
+-
+-`CurveYieldCyGovYieldStaking` accepts cyvlSDT and pays only cyGOV.
+-
+-- `targetYield`: cyGOV per 1e18 cyvlSDT per day, using 1e18 precision.
+-- `maxMintRate`: maximum total cyGOV paid per day.
+-- Max-rate backing: 30 days of free held cyGOV plus a protected Governance Token mint reservation.
+-- Held cyGOV funds rewards before reserved mint capacity is consumed.
+-- Accrued rewards become fully funded liabilities and are excluded from free backing.
+-- Owner may mint only the still-unused part of the original 15B initial allocation into contract inventory.
+-- Withdrawal fee: initial 2%, configurable 0–4%, paid to Treasury.
+-- Daily decay: initial 3, configurable 0–10; one unit is 0.01% per completed day.
+-- Decay is lazy, linear, interaction-triggered, and paid to Treasury.
+-- Rate settings are immediate for seven days after deployment, then use a 14-day timelock.
+-
+-The protected reservation is included in `reservedByMinter`. A later allocation reduction cannot cut the minter below minted plus reserved usage. The Governance Token owner cannot directly cancel this protected reservation; the Yield Staking minter may replace or release it through its rate-setting flow. Immediate minter revocation remains an emergency shutdown surface for auditor review.
+-
+-## Governance allocations
+-
+-| Module | Initial cap | Maximum ongoing allocation |
+-|---|---:|---:|
+-| Revenue Staking | 5B cyGOV | 8% |
+-| vlBoost Staking | 10B cyGOV | 12% |
+-| cyGOV Yield Staking | 15B cyGOV | 30% |
+-| Governance Staking Mint Controller | 20B cyGOV | 30% |
+-
+-Total initial allocation is 50B. Total ongoing allocation is 80%.
++## V18.9 changes
+ 
+-## Revenue fee changes
++- Yield Staking decay now uses cumulative additive rate-seconds, producing the same principal for the same elapsed time regardless of checkpoint frequency.
++- Reward accrual is time-weighted over that same linear principal path so decay-driven emissions are cadence-independent.
++- Normal Revenue Strategy migration must claim, convert, and compound ordinary rewards or revert.
++- A separate emergency upgrade uses the same proposed strategy and seven-day delay, skips broken harvesting, returns principal, and permanently pauses/retires the old strategy.
++- Revenue Staking yield above benchmark now charges 33% to Treasury and 7% to the live admin-role address; 60% of excess remains in the staker flow.
++
++## Unchanged V18.8 systems
++
++- Held cyGOV is spent before reserved mint capacity.
++- Protected 30-day `maxMintRate` backing and automatic reserve top-ups.
++- 5B / 10B / 15B / 20B initial allocations and 8% / 12% / 30% / 30% ongoing allocations.
++- Yield Staking 2% initial withdrawal fee, 4% cap, daily decay rate 0–10, and 7-day setup plus 14-day rate timelocks.
++- Revenue Strategy 3.9% performance fee, 0.1% caller fee, and 0.1% withdrawal fee.
++- All protocol fees go to Treasury except Revenue Staking's 7% excess-yield admin fee; caller incentives remain caller payments.
+ 
+-Revenue Staking rewards above the notifier-supplied benchmark are split:
+-
+-- 40% Treasury fee.
+-- 10% admin fee.
+-- 50% remains for active stakers.
+-
+-The 40% portion is transferred to Treasury. The 10% admin portion is transferred only to the address currently holding Revenue Staking's `admin` role. This admin fee is the suite's sole non-Treasury fee. Benchmark value represented by queued stake continues to be directed to Treasury separately.
+-
+-Revenue Strategy defaults remain:
+-
+-- 3.9% performance fee to Treasury.
+-- 0.1% harvest caller fee to caller.
+-- 0.1% withdrawal fee to Treasury.
+-- Harvest-on-deposit enabled.
+-
+-Hard caps remain 9% performance, 1% caller, 1% withdrawal, and 10% combined performance plus caller.
+-
+-## Existing V18.7 architecture retained
++## Critical status
+ 
+-- Beefy V7-derived Revenue Vault with stale-NAV-resistant deposits.
+-- Seven-day vault strategy replacement.
+-- Ten-day entire-converter replacement.
+-- Immediate SDT-market and USDC route configuration inside the converter.
+-- Dynamic Revenue Staking withdrawal-fee NAV and gross-up.
+-- Separate cyGOV distributor for vault shareholders.
+-- Slimmed Governance Staking with external Mint Controller and proposal-signature logic in the Governance Boost Strategy.
++This package was not compiled. Executable Hardhat tests, exact runtime sizes, fork simulation, deployment, and independent audit remain mandatory.
+ 
+ ## Auditor entry point
+ 
+-Read in this order:
+-
+-1. `auditor/AUDITOR-README-v18.8.md`
+-2. `auditor/AUDIT-SCOPE-v18.8.md`
+-3. `auditor/CHANGE-MAP-v18.7-to-v18.8.md`
+-4. `auditor/THREAT-MODEL-v18.8.md`
+-5. `auditor/PRIVILEGE-MATRIX-v18.8.md`
+-6. `auditor/TEST-PLAN-v18.8.md`
+-7. `auditor/BYTE-SIZE-ESTIMATE-v18.8.md`
+-8. `auditor/KNOWN-UNVERIFIED-v18.8.md`
+-9. `auditor/STATIC-CHECK-OUTPUT-v18.8.txt`
+-10. `auditor/SOURCE-DIFF-v18.7-to-v18.8.patch`
++1. `auditor/AUDITOR-README-v18.9.md`
++2. `auditor/CHANGE-MAP-v18.8-to-v18.9.md`
++3. `auditor/AUDIT-SCOPE-v18.9.md`
++4. `auditor/THREAT-MODEL-v18.9.md`
++5. `auditor/PRIVILEGE-MATRIX-v18.9.md`
++6. `auditor/TEST-PLAN-v18.9.md`
++7. `auditor/BYTE-SIZE-ESTIMATE-v18.9.md`
++8. `auditor/KNOWN-UNVERIFIED-v18.9.md`
++9. `auditor/STATIC-CHECK-OUTPUT-v18.9.txt`
++10. `auditor/SOURCE-DIFF-v18.8-to-v18.9.patch`
+ 
+-Run `npm run check:static:v18` for the permitted non-compiler checks. Compilation and `npm run size:v18` are mandatory auditor/deployment gates but were not run here.
++Run `npm run check:static:v18` for non-compiler checks only.
+--- a/CHANGELOG-v18.md	2026-07-26 04:19:14.000000000 +0000
++++ b/CHANGELOG-v18.md	2026-07-26 05:39:00.449174036 +0000
+@@ -1,3 +1,13 @@
++# V18.9
++
++- Fixed M-01 by replacing checkpoint-compounded decay with cumulative additive rate-seconds.
++- Added time-weighted reward integration over the same linear principal schedule without changing reward top-ups or mint funding.
++- Fixed M-02 by requiring normal strategy retirement to harvest/compound or revert.
++- Added seven-day delayed emergency strategy upgrade that skips failed harvest, returns principal, and permanently retires the old strategy.
++- Changed excess-yield fees to 33% Treasury plus 7% live admin, 40% total.
++- Added regression tests, verifier checks, threat model, test plan, size estimates, and V18.8→V18.9 source diff.
++
++---
+ # V18.8
+ 
+ ## cyGOV Yield Staking
+--- a/DEPLOYMENT-RUNBOOK-v18.md	2026-07-26 04:21:15.000000000 +0000
++++ b/DEPLOYMENT-RUNBOOK-v18.md	2026-07-26 05:39:00.449174036 +0000
+@@ -1,39 +1,15 @@
+-# V18.8 Deployment Runbook — Auditor Draft
++# V18.9 Deployment Runbook — Auditor Draft
+ 
+-Do not execute until compilation, executable tests, exact byte-size checks, fork simulation, and audit findings are complete.
++Do not deploy until compilation, full tests, byte-size checks, and independent audit pass.
+ 
+-## Required order
++## Mandatory gates
+ 
+-1. Deploy Governance Token.
+-2. Deploy Governance Staking, Governance Mint Controller, and Governance Boost Strategy; bind them.
+-3. Deploy cyvlSDT token and Locker.
+-4. Deploy cyGOV Yield Staking bound to cyvlSDT, Governance Token, and Treasury.
+-5. Deploy Revenue Staking, Boost Staking, and Boost Merchant.
+-6. Deploy Revenue Vault, Revenue Converter, Revenue Strategy, and cyGOV Distributor; wire them.
+-7. During the Governance Token's seven-day setup window, configure original minter allocations:
+-   - Revenue Staking: 5B and 800 bps.
+-   - Boost Staking: 10B and 1,200 bps.
+-   - cyGOV Yield Staking: 15B and 3,000 bps.
+-   - Governance Mint Controller: 20B and 3,000 bps.
+-8. Enable all four minters.
+-9. During Yield Staking's seven-day setup window, configure `targetYield`, `maxMintRate`, withdrawal fee, daily decay, and optional initial inventory mint.
+-10. Confirm `lockedMintReserve() >= requiredMintReserve()` after any nonzero max rate.
+-11. Configure Revenue Staking notifiers/reward token and confirm excess-fee constants are 4,000/1,000 bps.
+-12. Configure converter routes only after independent bytecode and recipient validation.
+-13. Transfer all Ownable contracts through the intended two-step handoff.
++- Compile Solidity 0.8.28 from a clean tree.
++- Run all tests, especially checkpoint-partition and strategy-migration tests.
++- Confirm all active runtime bytecode is below 24,576 bytes.
++- Verify config release `18.9`, chain ID 1, addresses, allocations, fee settings, and ownership recipients.
++- Verify Revenue Staking constants are 3,300 Treasury bps and 700 admin bps.
++- Verify the initial Revenue Strategy reports `retired == false`.
++- Simulate normal strategy migration with rewards and emergency migration with a forced harvest failure.
+ 
+-## Stop conditions
+-
+-Stop if:
+-
+-- any contract fails compilation or exceeds 24,576 deployed runtime bytes;
+-- Governance Staking or Revenue Strategy exceeds the 23,500-byte internal review threshold;
+-- max-rate reservation replacement can release old backing without atomically securing new backing;
+-- a nonzero locked Yield Staking reserve has no protected Governance Token reservation;
+-- allocation reduction can undercollateralize minted plus reserved Yield Staking commitments;
+-- accrued rewards are counted as free held backing;
+-- reward liabilities are credited before funding;
+-- decay is compounded, loops per day, underflows, or transfers anywhere except Treasury;
+-- benchmark reward splitting fails conservation or differs from 40%/10% of excess;
+-- any protocol fee receiver differs from Treasury, except harvest caller incentives and Revenue Staking's 10% admin-role fee;
+-- deployment verification omits the new Yield Staking minter or uses the old 85% allocation total.
++Abort if decay differs by checkpoint partition, normal migration can leave ordinary rewards behind, emergency migration bypasses the seven-day delay, retired strategy harvest/unpause remains possible, or any fee except the 7% admin fee routes outside Treasury.
+--- a/CODEX-AGENT-HANDOFF-v18.md	2026-07-26 04:13:49.000000000 +0000
++++ b/CODEX-AGENT-HANDOFF-v18.md	2026-07-26 05:39:00.449174036 +0000
+@@ -1,30 +1,14 @@
+-# Codex / Auditor Agent Handoff V18.8
++# Codex / Auditor Agent Handoff V18.9
+ 
+-## Objective
++Independently compile, test, measure, and audit the V18.9 active source. Never compile or deploy `archive-do-not-run/`.
+ 
+-Independently compile, test, measure, and audit the V18.8 active source. Never compile or deploy contracts under `archive-do-not-run/`.
++Review `auditor/CHANGE-MAP-v18.8-to-v18.9.md` first. Prove:
+ 
+-## First gates
++- arbitrary checkpoint partitions produce the same linear decay and decay-driven emissions;
++- reward top-up/reservation behavior is unchanged from V18.8;
++- normal migration harvests and compounds or reverts;
++- emergency migration uses the same seven-day candidate delay, returns principal, and permanently disables old-strategy harvesting;
++- excess-yield fees are 33% Treasury and 7% live admin, 40% total;
++- all active contracts compile and fit runtime limits.
+ 
+-1. Verify `Source-Manifest-v18.sha256`.
+-2. Run `npm run check:static:v18`.
+-3. Inspect `auditor/CHANGE-MAP-v18.7-to-v18.8.md`.
+-4. Compile with the pinned project settings and save full standard input/output.
+-5. Run exact runtime size measurement for every deployable.
+-6. Stop on any contract over 24,576 bytes.
+-
+-## Highest-priority audit questions
+-
+-- Does `replaceMintReservation` preserve the old reservation if replacement cannot fit?
+-- Can any allocation change reduce Yield Staking below its protected reservation?
+-- Are accrued reward liabilities excluded from free held cyGOV?
+-- Is every credited reward already funded by held cyGOV or an actual reserved mint?
+-- Can initial inventory minting consume more than the unused original 15B allowance?
+-- Does lazy decay charge exactly completed days linearly and transfer the exact accounted principal reduction to Treasury?
+-- Does max-rate backing recover from consumed reserve only through newly available minter capacity?
+-- Does Revenue Staking split excess yield 40% Treasury, 10% admin, and 50% user while conserving the total?
+-- Does the 40% excess portion reach Treasury, does the 10% excess portion reach only the live Revenue Staking admin-role address, and do all other protocol fees reach Treasury except caller incentives?
+-
+-## Required outputs
+-
+-Return compiler settings, exact byte sizes, test results, findings with source locations, deployment blockers, and a final verified source hash set.
++Report every failure with reproducible commands and transaction/state details.
+--- a/DELIVERY-NOTE-v18.md	2026-07-26 04:01:28.000000000 +0000
++++ b/DELIVERY-NOTE-v18.md	2026-07-26 05:39:00.445174036 +0000
+@@ -1,16 +1,14 @@
+-# CurveYield vlSDT Liquid Locker V18.8 Auditor Delivery Note
++# CurveYield vlSDT Liquid Locker V18.9 Auditor Delivery Note
+ 
+-V18.8 is an **uncompiled source handoff** prepared for an independent final audit pass.
++V18.9 is an uncompiled corrective handoff for M-01 and M-02.
+ 
+-Primary V18.8 review targets:
++Primary review targets:
+ 
+-1. cyGOV Yield Staking reward-rate and liability accounting.
+-2. Atomic 30-day `maxMintRate` reservation backing and allocation-reduction protection.
+-3. Held-first inventory use and direct initial-allocation inventory mint limits.
+-4. Lazy linear daily decay and Treasury settlement.
+-5. 40% Treasury + 10% admin yield-over-benchmark split; the admin portion goes only to the current Revenue Staking admin-role address and is the sole non-Treasury fee.
+-6. Four-module governance allocations and aggregate reservation invariants.
+-7. Deployment/verification wiring for the new minter and Ownable contract.
+-8. Exact compiled runtime size for every active contract.
++1. Checkpoint-independent additive linear decay and reward integration.
++2. No changes to cyGOV top-up, reservation, or funding mechanics.
++3. Strict harvest/compound-or-revert normal strategy retirement.
++4. Seven-day delayed emergency strategy upgrade and permanent old-strategy retirement.
++5. 33% Treasury + 7% live-admin fee on yield above benchmark.
++6. Exact compiled byte sizes and executable regression tests.
+ 
+-No Solidity compilation was attempted for this release by explicit instruction.
++No Solidity compilation was attempted by explicit instruction.
+--- a/STATIC-VERIFICATION-REPORT-v18.md	2026-07-26 04:13:49.000000000 +0000
++++ b/STATIC-VERIFICATION-REPORT-v18.md	2026-07-26 05:39:00.449174036 +0000
+@@ -1,27 +1,15 @@
+-# Static Verification Report V18.8
++# Static Verification Report V18.9
+ 
+-## Scope
++Permitted non-compiler checks cover:
+ 
+-Static source and packaging checks only. This report is not compilation, behavioral verification, exact bytecode measurement, deployment verification, or a security audit.
++- active source layout and import boundaries;
++- Solidity brace/structure scanning;
++- JavaScript syntax;
++- governance mint schedule and reservation controls;
++- Yield Staking additive rate-seconds arithmetic at 3 and 10 bps/day;
++- daily-versus-annual linear reward integration model;
++- strict and emergency strategy-retirement source/test requirements;
++- 33% Treasury / 7% live-admin benchmark split and conservation;
++- deployment/config consistency.
+ 
+-## Checks
+-
+-- Active source layout and historical archive isolation
+-- Pinned Solidity `0.8.28` pragma
+-- Balanced Solidity delimiters and resolvable local imports
+-- JavaScript syntax and JSON parsing
+-- Governance unlock schedule, hard-cap arithmetic, four minter allocations, and 80% aggregate ongoing allocation
+-- Protected mint-reservation replacement, allocation-floor protection, and Yield Staking 30-day rate backing
+-- cyGOV Yield Staking held-first funding, funded-liability accounting, lazy linear decay, initial-inventory boundary, and Treasury routing
+-- Revenue Staking 40% Treasury / 10% live-admin excess-yield split and conservation checks
+-- Revenue Vault/Strategy fee routing, dynamic staking withdrawal-fee handling, converter route controls, and delayed strategy/converter replacement
+-- Governance Staking convenience-function preservation and external mint-controller separation
+-- SHA-256 source manifest, ZIP integrity, and independent-extraction rerun
+-
+-## Source metrics
+-
+-The final source metrics are recorded in `auditor/BYTE-SIZE-ESTIMATE-v18.8.md`. Source size is not runtime bytecode size.
+-
+-## Runtime status
+-
+-No Solidity compiler was invoked. Exact creation bytecode, deployed runtime bytecode, and EIP-170 headroom remain mandatory before deployment.
++These checks are not compilation or executable contract tests. See `auditor/STATIC-CHECK-OUTPUT-v18.9.txt` for the final extracted-package run.
+--- a/UNCOMPILED-STATUS-v18.md	2026-07-26 03:49:39.000000000 +0000
++++ b/UNCOMPILED-STATUS-v18.md	2026-07-26 05:39:00.445174036 +0000
+@@ -1,27 +1,5 @@
+-# V18.8 Uncompiled and Unverified Status
++# V18.9 Uncompiled and Unverified Status
+ 
+-This handoff intentionally contains no compiler artifacts.
++The V18.9 package has not been compiled and no Hardhat Solidity test has been executed. Static text, syntax, arithmetic-model, source-layout, manifest, and archive checks do not establish deployability or security.
+ 
+-Permitted verification included in the package:
+-
+-- source-layout and archive-isolation checks;
+-- Solidity delimiter, pinned-pragma, and local-import structural scan;
+-- JavaScript syntax checks;
+-- governance unlock-schedule arithmetic;
+-- governance reservation/controller architecture assertions;
+-- Revenue Vault/Strategy/Converter architecture assertions;
+-- Governance Staking slimming assertions;
+-- cyGOV Yield Staking backing, allocation, decay, and Treasury-routing assertions;
+-- Revenue Staking over-benchmark split arithmetic;
+-- JSON parsing, SHA-256 manifest, and ZIP integrity checks.
+-
+-Not performed:
+-
+-- Solidity compilation or parsing by a compiler;
+-- executable unit/integration tests;
+-- exact creation/runtime bytecode measurement;
+-- fork or live-RPC simulation;
+-- deployment or ownership handoff;
+-- independent security audit.
+-
+-Static success must not be represented as deployability proof.
++Mandatory next steps: clean compile, full test suite, byte-size measurement, fork tests, independent audit, deployment simulation, ownership verification, and explorer verification.
