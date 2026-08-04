@@ -1,0 +1,58 @@
+name: Recover exact vlSDT route 4 source v2
+on:
+  push:
+    branches: [source-freeze/vlsdt-v18-9-router-claim-fixed-route-4-v2]
+    paths: ['.source-recovery/v1/REQUEST-v1.json']
+permissions:
+  contents: write
+concurrency:
+  group: recover-vlsdt-route-4-source-v2
+  cancel-in-progress: false
+jobs:
+  recover-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BRANCH: source-freeze/vlsdt-v18-9-router-claim-fixed-route-4-v2
+      RECOVERY_ROOT: .source-recovery/v1
+      STEM: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(4)
+      ZIP_NAME: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(4).zip
+      ZIP_SIZE: '705346'
+      ZIP_SHA256: 18ba0c39c30a741308b72102580d2e8a6e0832c8ef0ac04d027e4aea49e7f4ec
+      XZ_SIZE: '596264'
+      XZ_SHA256: 0a9797a1b48dfe8eb11664322323cd5c0f2a97d1f5547ec62b79df4a0d647aea
+      FILE_COUNT: '223'
+      INTERNAL_MANIFEST_COUNT: '222'
+    steps:
+      - name: Fetch exact recovery branch
+        env: {GITHUB_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Verify transport and reconstruct ZIP
+        run: |
+          set -euo pipefail
+          cat "$RECOVERY_ROOT"/manifest-parts/part-*.jsonpart > /tmp/chunk-manifest.json
+          CHUNK_MANIFEST_PATH=/tmp/chunk-manifest.json python3 "$RECOVERY_ROOT/verify_chunks.py"
+          cat "$RECOVERY_ROOT"/chunks/part-*.b64 | base64 --decode > /tmp/source.zip.xz
+          test "$(stat -c '%s' /tmp/source.zip.xz)" = "$XZ_SIZE"
+          test "$(sha256sum /tmp/source.zip.xz | awk '{print $1}')" = "$XZ_SHA256"
+          xz --decompress --stdout /tmp/source.zip.xz > /tmp/source.zip
+          test "$(stat -c '%s' /tmp/source.zip)" = "$ZIP_SIZE"
+          test "$(sha256sum /tmp/source.zip | awk '{print $1}')" = "$ZIP_SHA256"
+      - name: Verify extraction and stage exact paths
+        run: python3 "$RECOVERY_ROOT/stage_source.py"
+      - name: Commit repository-native exact source
+        env: {GITHUB_TOKEN: '${{ github.token }}'}
+        run: |
+          set -euo pipefail
+          git config user.name 'CurveYield Deep Assurance Controller'
+          git config user.email 'deep-assurance@users.noreply.github.com'
+          rm -rf "$RECOVERY_ROOT/chunks" "$RECOVERY_ROOT/REQUEST-v1.json"
+          git add -- "$STEM" "$RECOVERY_ROOT"
+          git commit -m 'audit: recover exact vlSDT route 4 source bytes v1'
+          git push origin "HEAD:$BRANCH"
