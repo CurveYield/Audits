@@ -1,0 +1,95 @@
+name: Stage vlSDT route 4 exact source v2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/stage-vlsdt-route-4-source-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  stage-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify and stage exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          STEM='CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(4)'
+          ROOT_ZIP='CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route.zip'
+          EXPECTED_SHA='18ba0c39c30a741308b72102580d2e8a6e0832c8ef0ac04d027e4aea49e7f4ec'
+          EXPECTED_SIZE='705346'
+          EXPECTED_FILES='223'
+          EXPECTED_MANIFEST='222'
+          Z_DIR="$STEM/(Z) $STEM"
+          U_DIR="$STEM/(U) $STEM"
+          CANON_ZIP="$Z_DIR/$STEM.zip"
+
+          test -f "$ROOT_ZIP"
+          test "$(stat -c%s "$ROOT_ZIP")" = "$EXPECTED_SIZE"
+          echo "$EXPECTED_SHA  $ROOT_ZIP" | sha256sum --check --strict
+
+          python3 - "$ROOT_ZIP" <<'PY'
+          import pathlib, sys, zipfile
+          p = pathlib.Path(sys.argv[1])
+          with zipfile.ZipFile(p) as z:
+              names = z.namelist()
+              if len(names) != len(set(names)):
+                  raise SystemExit('duplicate ZIP paths')
+              for info in z.infolist():
+                  q = pathlib.PurePosixPath(info.filename)
+                  if q.is_absolute() or '..' in q.parts:
+                      raise SystemExit(f'unsafe ZIP path: {info.filename}')
+                  mode = info.external_attr >> 16
+                  if mode and (mode & 0o170000) == 0o120000:
+                      raise SystemExit(f'symlink ZIP entry: {info.filename}')
+          PY
+
+          rm -rf "$STEM"
+          mkdir -p "$Z_DIR" "$U_DIR"
+          mv "$ROOT_ZIP" "$CANON_ZIP"
+          unzip -q "$CANON_ZIP" -d "$U_DIR"
+
+          test "$(find "$U_DIR" -type f | wc -l | tr -d ' ')" = "$EXPECTED_FILES"
+
+          python3 - "$U_DIR" "$EXPECTED_MANIFEST" <<'PY'
+          import hashlib, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          expected_count = int(sys.argv[2])
+          manifests = list(root.rglob('Source-Manifest-v18.sha256'))
+          if len(manifests) != 1:
+              raise SystemExit(f'expected one source manifest, found {len(manifests)}')
+          manifest = manifests[0]
+          base = manifest.parent
+          checked = 0
+          for raw in manifest.read_text(encoding='utf-8').splitlines():
+              line = raw.strip()
+              if not line or line.startswith('#'):
+                  continue
+              digest, rel = line.split(None, 1)
+              rel = rel.lstrip('*').strip()
+              target = base / rel
+              if not target.is_file():
+                  raise SystemExit(f'missing manifest file: {rel}')
+              actual = hashlib.sha256(target.read_bytes()).hexdigest()
+              if actual.lower() != digest.lower():
+                  raise SystemExit(f'manifest mismatch: {rel}')
+              checked += 1
+          if checked != expected_count:
+              raise SystemExit(f'expected {expected_count} manifest entries, checked {checked}')
+          print(f'manifest verified: {checked}/{expected_count}')
+          PY
+
+          test "$(stat -c%s "$CANON_ZIP")" = "$EXPECTED_SIZE"
+          echo "$EXPECTED_SHA  $CANON_ZIP" | sha256sum --check --strict
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- "$ROOT_ZIP" "$STEM"
+          git commit -m 'Stage vlSDT route 4 exact source v1'
+          git push
