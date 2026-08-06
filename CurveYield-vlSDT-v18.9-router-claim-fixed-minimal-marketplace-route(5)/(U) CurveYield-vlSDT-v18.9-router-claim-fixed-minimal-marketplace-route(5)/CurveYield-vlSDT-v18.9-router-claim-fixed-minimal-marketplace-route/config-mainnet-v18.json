@@ -1,0 +1,115 @@
+{
+  "version": 18,
+  "network": "ethereum-mainnet",
+  "chainId": 1,
+  "finalOwner": "0x9f2B20A772246960810045905B7daccf960eE288",
+  "finalAdmin": "0x9f2B20A772246960810045905B7daccf960eE288",
+  "feeReceivers": {
+    "treasury": "0x9f2B20A772246960810045905B7daccf960eE288"
+  },
+  "stakeDao": {
+    "sdt": "0x73968b9a57c6E53d41345FD57a6E6ae27d6CDB2F",
+    "vlSdt": "0x94818A7baa7e9F5dC62ce4da1B52ef9a760b80B8",
+    "vlBoost": "0xaB05ca46d1c78CAbB051efFE35099714Cad2AddA",
+    "router": "0x0f542fA75c871EB1b93Ef881b73e46acF733392f",
+    "vlSdtFeeDistributorUsdc": "0xCa94395469a88E9cAC0D5E5e308910E298270d30",
+    "vlSdtFeeDistributorSdt": "0x6d57d34259f6dc31c9a241c199822861940d38f9",
+    "boostMarketplace": "0xbc38D256E559FEd3fA95A6cdC633C667283fb6b8"
+  },
+  "governanceToken": {
+    "name": "CurveYield Governance",
+    "symbol": "cyGOV"
+  },
+  "governanceStaking": {
+    "name": "Staked CurveYield Governance",
+    "symbol": "stcyGOV",
+    "initialStandardWithdrawFeeBps": 300,
+    "initialBaseWithdrawFeeBps": 0,
+    "initialWithdrawalDelaySeconds": 1209600,
+    "aragonVotingPlugin": null,
+    "rewardTokens": [],
+    "notifiers": []
+  },
+  "governanceBoostStrategy": {
+    "previousStrategy": null
+  },
+  "boostEconomics": {
+    "minimumBoostStakingMultiplierWei": "2000000000000000000",
+    "maximumBoostStakingMultiplierWei": "10000000000000000000",
+    "merchantStandingReserveBps": 0,
+    "boostStakingStandingReserveBps": 0,
+    "daoBoostReleasedToModules": "0",
+    "merchantPaymentTokens": []
+  },
+  "emissions": {
+    "revenueStakingGovernancePerSecond": "0",
+    "boostStakingGovernancePerSecond": "0"
+  },
+  "deployment": {
+    "confirmations": 2,
+    "gasLimitMultiplierBps": 12000,
+    "anvilPort": 8545,
+    "anvilBalanceWei": "100000000000000000000",
+    "anvilBlockTimeSeconds": 0,
+    "anvilForkBlockNumber": null
+  },
+  "governanceMinting": {
+    "minimumAllocationBps": 3000,
+    "allocationChangeDelaySeconds": 1209600,
+    "allocations": {
+      "revenueStaking": {
+        "initialCap": "5000000000000000000000000000",
+        "additionalBps": 800
+      },
+      "boostStaking": {
+        "initialCap": "10000000000000000000000000000",
+        "additionalBps": 1200
+      },
+      "cyGovYieldStaking": {
+        "initialCap": "15000000000000000000000000000",
+        "additionalBps": 3000
+      },
+      "governanceStaking": {
+        "initialCap": "20000000000000000000000000000",
+        "additionalBps": 3000
+      }
+    },
+    "revenueStaking": {
+      "periodicAmount": "0",
+      "periodicIntervalSeconds": 0
+    },
+    "boostStaking": {
+      "periodicAmount": "0",
+      "periodicIntervalSeconds": 0
+    },
+    "governanceStaking": {
+      "periodicAmount": "0",
+      "periodicIntervalSeconds": 0
+    }
+  },
+  "release": "18.9",
+  "revenueStakingConfig": {
+    "immediateWithdrawFeeBps": 50
+  },
+  "revenueVault": {
+    "name": "CurveYield Compounding vlSDT",
+    "symbol": "cycvlSDT",
+    "strategyApprovalDelaySeconds": 604800,
+    "withdrawalFeeBps": 10,
+    "performanceFeeBps": 390,
+    "callFeeBps": 10,
+    "harvestOnDeposit": true
+  },
+  "revenueConverter": {
+    "sdtSwapAdapter": null,
+    "usdc": null,
+    "usdcAdapter": null
+  },
+  "cyGovYieldStaking": {
+    "initialTargetYield": "0",
+    "initialMaxMintRate": "0",
+    "initialInventoryMint": "0",
+    "initialWithdrawFeeBps": 200,
+    "initialDailyDecayRate": 3
+  }
+}

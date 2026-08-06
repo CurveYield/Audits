@@ -1,0 +1,1257 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.28;
+
+/**
+ * @title CurveYield System Component
+ * @notice CurveYield is a decentralized NGO building optimized DeFi systems for the good of all.
+ *
+ * @dev CurveYield integrates specialized AMM infrastructure, tokenized yield strategies, credit
+ * markets, and protocol-owned liquidity into a unified, capital-efficient liquidity stack governed
+ * by an open, international DAO community.
+ *
+ * Protocol operations are enhanced by cross-chain bridging and messaging, MEV capture systems,
+ * off-chain to on-chain automation, and peer-to-peer data networks.
+ *
+ * This contract is one component of the CurveYield system.
+ *
+ * CurveYield uses proven DeFi primitives where possible and adds targeted coordination and
+ * capital-efficiency-enhancing contracts where needed. Users and integrators must review
+ * CurveYield documentation before use.
+ *
+ * Learn more:
+ * Documentation: https://docs.curveyield.com
+ * dApp: https://curveyield.online
+ * GitHub: https://github.com/curveyield
+ *
+ * Decentralized links may have limited or delayed availability during periods of high network activity:
+ * https://curveyield.eth.limo
+ * https://curveyield.dao
+ *
+ * Note: curveyield.dao may require a Brave Browser or an Unstoppable Domains browser plugin to use.
+ */
+
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import {Ownable, Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {IGovernanceBoostStrategy} from "./interfaces/IGovernanceBoostStrategy.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
+contract CurveYieldGovernanceStaking is ERC20Votes, Ownable2Step, ReentrancyGuard {
+    using SafeERC20 for IERC20;
+    using Checkpoints for Checkpoints.Trace208;
+    using Checkpoints for Checkpoints.Trace160;
+
+    uint256 public constant BPS = 10_000;
+    uint256 public constant MAX_WITHDRAW_TAX_BPS = 1_500;
+    uint256 public constant MAX_BASE_WITHDRAW_FEE_BPS = 300;
+    uint256 public constant MAX_WITHDRAW_HOLD_TIME = 150 days;
+    uint256 public constant WITHDRAW_CONFIG_SETUP_WINDOW = 7 days;
+    uint256 public constant WITHDRAW_CONFIG_DELAY = 7 days;
+    uint256 public constant EARLY_STANDARD_FEE_REDUCTION_BPS = 5_000;
+    uint256 public constant STREAM_DURATION = 14 days;
+    uint256 public constant REWARD_CYCLE_INTERVAL = 1 days;
+    uint256 public constant PRECISION = 1e27;
+    uint256 public constant MAX_REWARD_TOKENS = 8;
+    uint256 public constant MAX_ACTIVE_STREAMS_PER_TOKEN = 14;
+    uint256 public constant MIN_REWARD_ELIGIBLE_BALANCE = 10 ether;
+    uint256 public constant BASE_PARTICIPATION_MULTIPLIER_BPS = 10_000;
+    uint256 public constant MAX_COMMUNITY_BONUS_BPS = 15_000;
+    uint256 public constant MAX_PARTICIPATION_MULTIPLIER_BPS = 45_000;
+    bytes32 public constant PROPOSAL_SYNC_TYPEHASH = keccak256(
+        "ProposalSync(address caller,uint256 expectedStartIndex,bytes32 proposalIdsHash,uint256 deadline)"
+    );
+
+
+    struct Stream {
+        uint256 amount;
+        uint64 start;
+        uint64 end;
+    }
+
+    /// @notice Batched fourteen-day reward accounting for one token and one weight class.
+    struct RewardData {
+        uint256 rewardPerTokenStored;
+        uint256 pendingRewards;
+        uint256 scaledRemainder;
+        uint64 lastUpdate;
+        uint64 streamHead;
+        uint64 pendingSince;
+        uint64 lastStreamStart;
+        Stream[] streams;
+    }
+
+    struct WithdrawalRequest {
+        address owner;
+        address receiver;
+        uint128 amount;
+        uint16 standardFeeBps;
+        uint16 baseFeeBps;
+        uint64 requestedAt;
+        uint64 unlockTime;
+        bool completed;
+    }
+
+    IERC20 public immutable GOVERNANCE_TOKEN;
+    uint64 public immutable withdrawalConfigSetupEnds;
+    address public treasuryReceiver;
+
+    uint256 public withdrawTaxBps;
+    uint256 public baseWithdrawFeeBps;
+    uint256 public withdrawHoldTime;
+    uint256 public nextWithdrawalId = 1;
+    uint256 public pendingWithdrawTaxBps;
+    uint256 public pendingBaseWithdrawFeeBps;
+    uint256 public pendingWithdrawHoldTime;
+    uint256 public pendingWithdrawalConfigReadyAt;
+    bool public pendingWithdrawalConfigSet;
+
+    address[] public rewardTokens;
+    mapping(address => bool) public isRewardToken;
+    mapping(address => bool) public isNotifier;
+    /// @dev Ordinary rewards use current reward-eligible stake; participation rewards use current working weight.
+    mapping(address => RewardData) internal _rewardData;
+    mapping(address => RewardData) internal _participationRewardData;
+    mapping(address => mapping(address => uint256)) public userRewardPerTokenPaid;
+    mapping(address => mapping(address => uint256)) public userParticipationRewardPerWeightPaid;
+    mapping(address => mapping(address => uint256)) public accruedRewards;
+    mapping(address => mapping(address => uint256)) public accruedParticipationRewards;
+    mapping(uint256 => WithdrawalRequest) public withdrawalRequests;
+
+    IGovernanceBoostStrategy public governanceBoostStrategy;
+    uint256 public totalParticipationWeight;
+    mapping(address => uint256) public communityBonusBps;
+    mapping(address => bool) public isProposalRegistrar;
+    mapping(address => uint256) public participationWorkingWeight;
+    uint256 public activeStakerCount;
+    mapping(address => bool) public hasEverStaked;
+    address[] internal _governanceStakers;
+    uint256 public totalRewardEligibleSupply;
+
+    mapping(address => Checkpoints.Trace208) internal _balanceCheckpoints;
+    Checkpoints.Trace208 internal _rewardEligibleSupplyCheckpoints;
+    mapping(address => Checkpoints.Trace160) internal _delegateCheckpoints;
+
+    error ZeroAddress();
+    error ZeroAmount();
+    error NonTransferable();
+    error InvalidWithdrawalConfig();
+    error NoPendingWithdrawalConfig();
+    error WithdrawalConfigNotReady();
+    error InsufficientStake();
+    error InvalidWithdrawalRequest();
+    error WithdrawalNotReady();
+    error WithdrawalAlreadyReady();
+    error EarlyWithdrawalDisabled();
+    error NotWithdrawalOwner();
+    error UnsupportedRewardToken();
+    error RewardTokenAlreadyAdded();
+    error RewardTokenLimit();
+    error NotNotifier();
+    error ValueTooLarge();
+    error ActiveStreamLimit();
+    error RewardCycleNotReady();
+    error UnderlyingCannotBeReward();
+    error NonExactRewardTransfer(uint256 expected, uint256 received);
+    error GovernanceBoostStrategyNotSet();
+    error InvalidGovernanceBoostStrategy();
+    error InvalidPreviousGovernanceBoostStrategy();
+    error CommunityBonusTooHigh();
+    error NotProposalRegistrar();
+    error ProposalSyncExpired();
+    error InvalidProposalSyncSigner();
+
+    event Staked(address indexed caller, address indexed recipient, uint256 amount);
+    event TreasuryReceiverSet(address indexed oldReceiver, address indexed newReceiver);
+    event WithdrawalConfigSet(uint256 standardFeeBps, uint256 baseFeeBps, uint256 holdTime);
+    event WithdrawalConfigQueued(
+        uint256 standardFeeBps, uint256 baseFeeBps, uint256 holdTime, uint256 executableAt
+    );
+    event WithdrawalRequested(
+        uint256 indexed id,
+        address indexed owner,
+        address indexed receiver,
+        uint256 grossAmount,
+        uint256 standardFeeBps,
+        uint256 baseFeeBps,
+        uint256 unlockTime
+    );
+    event WithdrawalCompleted(
+        uint256 indexed id,
+        address indexed owner,
+        address indexed receiver,
+        uint256 netAmount,
+        uint256 feeAmount
+    );
+    event EarlyWithdrawalCompleted(
+        uint256 indexed id,
+        address indexed owner,
+        address indexed receiver,
+        uint256 netAmount,
+        uint256 feeAmount,
+        uint256 effectiveFeeBps
+    );
+    event RewardTokenAdded(address indexed token);
+    event NotifierSet(address indexed notifier, bool allowed);
+    event RewardQueued(address indexed token, uint256 amount, bool indexed participationReward, uint256 readyAt);
+    event RewardNotified(address indexed token, uint256 amount, uint256 endTime);
+    event RewardDeferred(address indexed token, uint256 amount, bool indexed participationReward);
+    event RewardClaimed(address indexed user, address indexed token, address indexed receiver, uint256 amount);
+    event GovernanceBoostStrategySet(address indexed oldStrategy, address indexed newStrategy);
+    event AragonVotingPluginSet(address indexed plugin);
+    event ProposalRegistrarSet(address indexed registrar, bool allowed);
+    event ProposalSyncRelayed(
+        address indexed caller,
+        address indexed signer,
+        uint256 indexed expectedStartIndex,
+        uint256 proposalCount
+    );
+    event CanonicalProposalRegistered(
+        uint256 indexed globalIndex,
+        uint256 indexed proposalId,
+        uint64 snapshotTimepoint,
+        uint64 endDate
+    );
+    event CommunityBonusSet(address indexed account, uint256 oldBonusBps, uint256 newBonusBps);
+    event ProposalParticipationRecorded(
+        uint256 indexed proposalId,
+        address indexed account,
+        uint8 status,
+        address votingDelegate,
+        uint256 newMultiplierBps
+    );
+    event ParticipationRewardNotified(address indexed token, uint256 amount, uint256 endTime);
+    event ParticipationWorkingWeightUpdated(
+        address indexed account, uint256 oldWeight, uint256 newWeight, uint256 totalWorkingWeight
+    );
+    event ParticipationAccountKicked(
+        address indexed caller, address indexed account, uint256 evaluatedProposals
+    );
+
+    constructor(
+        address initialOwner_,
+        address governanceToken_,
+        address initialTreasuryReceiver_,
+        string memory name_,
+        string memory symbol_,
+        uint256 initialWithdrawTaxBps_,
+        uint256 initialBaseWithdrawFeeBps_,
+        uint256 initialWithdrawHoldTime_
+    ) ERC20(name_, symbol_) EIP712(name_, "1") Ownable(initialOwner_) {
+        if (
+            initialOwner_ == address(0) || governanceToken_ == address(0)
+                || initialTreasuryReceiver_ == address(0)
+        ) revert ZeroAddress();
+        GOVERNANCE_TOKEN = IERC20(governanceToken_);
+        treasuryReceiver = initialTreasuryReceiver_;
+        withdrawalConfigSetupEnds = uint64(block.timestamp + WITHDRAW_CONFIG_SETUP_WINDOW);
+        isProposalRegistrar[initialOwner_] = true;
+        emit ProposalRegistrarSet(initialOwner_, true);
+        emit TreasuryReceiverSet(address(0), initialTreasuryReceiver_);
+        _applyWithdrawalConfig(
+            initialWithdrawTaxBps_, initialBaseWithdrawFeeBps_, initialWithdrawHoldTime_
+        );
+    }
+
+    function transfer(address, uint256) public pure override returns (bool) {
+        revert NonTransferable();
+    }
+
+    function transferFrom(address, address, uint256) public pure override returns (bool) {
+        revert NonTransferable();
+    }
+
+    function approve(address, uint256) public pure override returns (bool) {
+        revert NonTransferable();
+    }
+
+    function setWithdrawalConfig(uint256 standardFeeBps, uint256 holdTime) external onlyOwner {
+        _setWithdrawalConfig(standardFeeBps, baseWithdrawFeeBps, holdTime);
+    }
+
+    function setWithdrawalConfig(
+        uint256 standardFeeBps,
+        uint256 newBaseWithdrawFeeBps,
+        uint256 holdTime
+    ) external onlyOwner {
+        _setWithdrawalConfig(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+    }
+
+    function executeWithdrawalConfig() external onlyOwner {
+        if (!pendingWithdrawalConfigSet) revert NoPendingWithdrawalConfig();
+        if (block.timestamp < pendingWithdrawalConfigReadyAt) revert WithdrawalConfigNotReady();
+        uint256 standardFeeBps = pendingWithdrawTaxBps;
+        uint256 newBaseWithdrawFeeBps = pendingBaseWithdrawFeeBps;
+        uint256 holdTime = pendingWithdrawHoldTime;
+        delete pendingWithdrawTaxBps;
+        delete pendingBaseWithdrawFeeBps;
+        delete pendingWithdrawHoldTime;
+        delete pendingWithdrawalConfigReadyAt;
+        pendingWithdrawalConfigSet = false;
+        _applyWithdrawalConfig(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+    }
+
+    function setTreasuryReceiver(address newReceiver) external onlyOwner {
+        if (newReceiver == address(0)) revert ZeroAddress();
+        emit TreasuryReceiverSet(treasuryReceiver, newReceiver);
+        treasuryReceiver = newReceiver;
+    }
+
+    function _setWithdrawalConfig(
+        uint256 standardFeeBps,
+        uint256 newBaseWithdrawFeeBps,
+        uint256 holdTime
+    ) internal {
+        _validateWithdrawalConfig(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+        if (block.timestamp <= withdrawalConfigSetupEnds) {
+            _applyWithdrawalConfig(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+            return;
+        }
+        pendingWithdrawTaxBps = standardFeeBps;
+        pendingBaseWithdrawFeeBps = newBaseWithdrawFeeBps;
+        pendingWithdrawHoldTime = holdTime;
+        pendingWithdrawalConfigReadyAt = block.timestamp + WITHDRAW_CONFIG_DELAY;
+        pendingWithdrawalConfigSet = true;
+        emit WithdrawalConfigQueued(
+            standardFeeBps,
+            newBaseWithdrawFeeBps,
+            holdTime,
+            pendingWithdrawalConfigReadyAt
+        );
+    }
+
+    function _applyWithdrawalConfig(
+        uint256 standardFeeBps,
+        uint256 newBaseWithdrawFeeBps,
+        uint256 holdTime
+    ) internal {
+        _validateWithdrawalConfig(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+        withdrawTaxBps = standardFeeBps;
+        baseWithdrawFeeBps = newBaseWithdrawFeeBps;
+        withdrawHoldTime = holdTime;
+        emit WithdrawalConfigSet(standardFeeBps, newBaseWithdrawFeeBps, holdTime);
+    }
+
+    function _validateWithdrawalConfig(
+        uint256 standardFeeBps,
+        uint256 newBaseWithdrawFeeBps,
+        uint256 holdTime
+    ) internal pure {
+        if (
+            standardFeeBps > MAX_WITHDRAW_TAX_BPS
+                || newBaseWithdrawFeeBps > MAX_BASE_WITHDRAW_FEE_BPS
+                || holdTime > MAX_WITHDRAW_HOLD_TIME
+                || (holdTime == 0 && standardFeeBps == 0)
+        ) revert InvalidWithdrawalConfig();
+    }
+
+    function addRewardToken(address token) external onlyOwner {
+        if (token == address(0)) revert ZeroAddress();
+        if (token == address(GOVERNANCE_TOKEN)) revert UnderlyingCannotBeReward();
+        if (isRewardToken[token]) revert RewardTokenAlreadyAdded();
+        if (rewardTokens.length >= MAX_REWARD_TOKENS) revert RewardTokenLimit();
+        isRewardToken[token] = true;
+        rewardTokens.push(token);
+        _rewardData[token].lastUpdate = uint64(block.timestamp);
+        _participationRewardData[token].lastUpdate = uint64(block.timestamp);
+        emit RewardTokenAdded(token);
+    }
+
+    function setNotifier(address notifier, bool allowed) external onlyOwner {
+        _setNotifier(notifier, allowed);
+    }
+
+    function setNotifiers(address[] calldata notifiers, bool allowed) external onlyOwner {
+        uint256 length = notifiers.length;
+        for (uint256 i; i < length;) {
+            _setNotifier(notifiers[i], allowed);
+            unchecked { ++i; }
+        }
+    }
+
+    function _setNotifier(address notifier, bool allowed) internal {
+        if (notifier == address(0)) revert ZeroAddress();
+        isNotifier[notifier] = allowed;
+        emit NotifierSet(notifier, allowed);
+    }
+
+
+    function rewardTokenCount() external view returns (uint256) {
+        return rewardTokens.length;
+    }
+
+    function streamCount(address token) external view returns (uint256) {
+        return _rewardData[token].streams.length;
+    }
+
+    function getStream(address token, uint256 index) external view returns (Stream memory) {
+        return _rewardData[token].streams[index];
+    }
+
+    function getParticipationStream(address token, uint256 index) external view returns (Stream memory) {
+        return _participationRewardData[token].streams[index];
+    }
+
+    function pendingReward(address token) external view returns (uint256) {
+        return _rewardData[token].pendingRewards;
+    }
+
+    function pendingParticipationReward(address token) external view returns (uint256) {
+        return _participationRewardData[token].pendingRewards;
+    }
+
+    function governanceStakerCount() external view returns (uint256) {
+        return _governanceStakers.length;
+    }
+
+    function governanceStakerAt(uint256 index) external view returns (address) {
+        return _governanceStakers[index];
+    }
+
+    function rewardEligibleSupplyAt(uint256 timepoint) external view returns (uint256) {
+        return _rewardEligibleSupplyCheckpoints.upperLookup(SafeCast.toUint48(timepoint));
+    }
+
+    function participationStreamCount(address token) external view returns (uint256) {
+        return _participationRewardData[token].streams.length;
+    }
+
+    function setGovernanceBoostStrategy(address strategy) external onlyOwner {
+        if (strategy == address(0) || strategy.code.length == 0) {
+            revert InvalidGovernanceBoostStrategy();
+        }
+        IGovernanceBoostStrategy candidate = IGovernanceBoostStrategy(strategy);
+        if (candidate.governanceStaking() != address(this)) revert InvalidGovernanceBoostStrategy();
+        address oldStrategy = address(governanceBoostStrategy);
+        if (candidate.previousStrategy() != oldStrategy) {
+            revert InvalidPreviousGovernanceBoostStrategy();
+        }
+        governanceBoostStrategy = candidate;
+        emit GovernanceBoostStrategySet(oldStrategy, strategy);
+    }
+
+    function participationMultiplierBps(address account) public view returns (uint256 multiplier) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        multiplier = address(strategy) == address(0)
+            ? BASE_PARTICIPATION_MULTIPLIER_BPS
+            : strategy.baseGovernanceBoostBps(account);
+        multiplier += communityBonusBps[account];
+        if (multiplier > MAX_PARTICIPATION_MULTIPLIER_BPS) {
+            multiplier = MAX_PARTICIPATION_MULTIPLIER_BPS;
+        }
+    }
+
+    function participationWeight(address account) public view returns (uint256) {
+        return participationWorkingWeight[account];
+    }
+
+    function previewParticipationWeight(address account) public view returns (uint256) {
+        return _weightForBalance(account, balanceOf(account));
+    }
+
+    function aragonVotingPlugin() public view returns (address) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? address(0) : strategy.aragonVotingPlugin();
+    }
+
+    function registeredProposalCount() public view returns (uint256) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? 0 : strategy.registeredProposalCount();
+    }
+
+    function lastRegisteredSnapshotTimepoint() public view returns (uint64) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? 0 : strategy.lastRegisteredSnapshotTimepoint();
+    }
+
+    function canonicalProposals(uint256 index)
+        external
+        view
+        returns (uint256 proposalId, uint64 endDate, uint64 snapshotTimepoint)
+    {
+        return _requireGovernanceBoostStrategy().canonicalProposals(index);
+    }
+
+    function processedProposalCount(address account) public view returns (uint256) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? 0 : strategy.processedProposalCount(account);
+    }
+
+    function participationHistoryCount(address account) public view returns (uint8) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? 0 : strategy.participationHistoryCount(account);
+    }
+
+    function participationHistoryCurrent(address account) public view returns (bool) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) || strategy.participationHistoryCurrent(account);
+    }
+
+    function participationRecord(address account, uint256 index)
+        external
+        view
+        returns (uint64 endDate, uint8 status)
+    {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        if (address(strategy) == address(0)) return (0, 0);
+        return strategy.participationRecord(account, index);
+    }
+
+    function participationStats(address account)
+        external
+        view
+        returns (uint256 count, uint256 directHits, uint256 delegatedHits, uint256 misses)
+    {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        if (address(strategy) == address(0)) return (0, 0, 0, 0);
+        return strategy.participationStats(account);
+    }
+
+    function canonicalProposalCount() external view returns (uint256) {
+        return registeredProposalCount();
+    }
+
+    function canonicalProposalWindowCount() external view returns (uint256) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? 0 : strategy.canonicalProposalWindowCount();
+    }
+
+    function proposalStateHash() external view returns (bytes32) {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        return address(strategy) == address(0) ? bytes32(0) : strategy.proposalStateHash();
+    }
+
+    function participationStreamActive() public view returns (bool) {
+        for (uint256 i; i < rewardTokens.length; ++i) {
+            RewardData storage data = _participationRewardData[rewardTokens[i]];
+            for (uint256 j = data.streamHead; j < data.streams.length; ++j) {
+                if (data.streams[j].end > block.timestamp) return true;
+            }
+        }
+        return false;
+    }
+
+    function balanceAt(address account, uint256 timepoint) public view returns (uint256) {
+        return _balanceCheckpoints[account].upperLookup(SafeCast.toUint48(timepoint));
+    }
+
+    function delegateAt(address account, uint256 timepoint) public view returns (address) {
+        return address(_delegateCheckpoints[account].upperLookup(SafeCast.toUint96(timepoint)));
+    }
+
+    function setAragonVotingPlugin(address plugin) external onlyOwner {
+        _requireGovernanceBoostStrategy().setAragonVotingPlugin(plugin);
+        emit AragonVotingPluginSet(plugin);
+    }
+
+    function setProposalRegistrar(address registrar, bool allowed) external onlyOwner {
+        if (registrar == address(0)) revert ZeroAddress();
+        isProposalRegistrar[registrar] = allowed;
+        emit ProposalRegistrarSet(registrar, allowed);
+    }
+
+    function registerFinalizedProposals(uint256 expectedStartIndex, uint256[] calldata proposalIds)
+        external
+        nonReentrant
+    {
+        if (!isProposalRegistrar[msg.sender]) revert NotProposalRegistrar();
+        _registerFinalizedProposals(expectedStartIndex, proposalIds);
+    }
+
+    function registerFinalizedProposalsWithSignature(
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant returns (address signer) {
+        signer = _registerFinalizedProposalsWithSignature(
+            expectedStartIndex, proposalIds, deadline, signature
+        );
+    }
+
+    function proposalSyncDigest(
+        address caller,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline
+    ) external view returns (bytes32) {
+        return _proposalSyncDigest(caller, expectedStartIndex, proposalIds, deadline);
+    }
+
+    function _registerFinalizedProposalsWithSignature(
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) internal returns (address signer) {
+        if (block.timestamp > deadline) revert ProposalSyncExpired();
+        signer = ECDSA.recover(
+            _proposalSyncDigest(msg.sender, expectedStartIndex, proposalIds, deadline), signature
+        );
+        if (!isProposalRegistrar[signer]) revert InvalidProposalSyncSigner();
+        _registerFinalizedProposals(expectedStartIndex, proposalIds);
+        emit ProposalSyncRelayed(msg.sender, signer, expectedStartIndex, proposalIds.length);
+    }
+
+    function _proposalSyncDigest(
+        address caller,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline
+    ) internal view returns (bytes32) {
+        bytes32 proposalIdsHash = keccak256(abi.encode(proposalIds));
+        bytes32 structHash = keccak256(
+            abi.encode(PROPOSAL_SYNC_TYPEHASH, caller, expectedStartIndex, proposalIdsHash, deadline)
+        );
+        return _hashTypedDataV4(structHash);
+    }
+
+    function _registerFinalizedProposals(
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds
+    ) internal {
+        _requireGovernanceBoostStrategy().registerFinalizedProposals(
+            expectedStartIndex, proposalIds
+        );
+    }
+
+    function emitCanonicalProposalRegistered(
+        uint256 globalIndex,
+        uint256 proposalId,
+        uint64 snapshotTimepoint,
+        uint64 endDate
+    ) external {
+        if (msg.sender != address(governanceBoostStrategy)) {
+            revert InvalidGovernanceBoostStrategy();
+        }
+        emit CanonicalProposalRegistered(globalIndex, proposalId, snapshotTimepoint, endDate);
+    }
+
+    function emitProposalParticipationRecorded(
+        uint256 proposalId,
+        address account,
+        uint8 status,
+        address votingDelegate,
+        uint256 newMultiplierBps
+    ) external {
+        if (msg.sender != address(governanceBoostStrategy)) {
+            revert InvalidGovernanceBoostStrategy();
+        }
+        emit ProposalParticipationRecorded(
+            proposalId, account, status, votingDelegate, newMultiplierBps
+        );
+    }
+
+    function kick(address account) external nonReentrant returns (uint256 evaluatedProposals) {
+        return _kick(account);
+    }
+
+    function kickWithProposalSync(
+        address account,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant returns (uint256 evaluatedProposals) {
+        _registerFinalizedProposalsWithSignature(expectedStartIndex, proposalIds, deadline, signature);
+        return _kick(account);
+    }
+
+    function _kick(address account) internal returns (uint256 evaluatedProposals) {
+        if (account == address(0)) revert ZeroAddress();
+        _checkpointAllRewards(account);
+        evaluatedProposals = _refreshParticipationHistory(account);
+        _setParticipationWorkingWeight(account);
+        _startReadyCycles();
+        emit ParticipationAccountKicked(msg.sender, account, evaluatedProposals);
+    }
+
+    function setCommunityBonusBps(address account, uint256 bonusBps) external onlyOwner {
+        if (account == address(0)) revert ZeroAddress();
+        if (bonusBps > MAX_COMMUNITY_BONUS_BPS) revert CommunityBonusTooHigh();
+        _checkpointAllRewards(account);
+        _refreshParticipationHistory(account);
+        uint256 oldBonus = communityBonusBps[account];
+        communityBonusBps[account] = bonusBps;
+        _setParticipationWorkingWeight(account);
+        _startReadyCycles();
+        emit CommunityBonusSet(account, oldBonus, bonusBps);
+    }
+
+    function _requireGovernanceBoostStrategy()
+        internal
+        view
+        returns (IGovernanceBoostStrategy strategy)
+    {
+        strategy = governanceBoostStrategy;
+        if (address(strategy) == address(0)) revert GovernanceBoostStrategyNotSet();
+    }
+
+    function stake(uint256 amount) external nonReentrant returns (uint256 votingTokensMinted) {
+        return _stakeFor(msg.sender, msg.sender, amount);
+    }
+
+    function stakeFor(address recipient, uint256 amount) public nonReentrant returns (uint256 votingTokensMinted) {
+        return _stakeFor(msg.sender, recipient, amount);
+    }
+
+    function stakeWithProposalSync(
+        uint256 amount,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant returns (uint256 votingTokensMinted) {
+        _registerFinalizedProposalsWithSignature(expectedStartIndex, proposalIds, deadline, signature);
+        return _stakeFor(msg.sender, msg.sender, amount);
+    }
+
+    function stakeForWithProposalSync(
+        address recipient,
+        uint256 amount,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant returns (uint256 votingTokensMinted) {
+        _registerFinalizedProposalsWithSignature(expectedStartIndex, proposalIds, deadline, signature);
+        return _stakeFor(msg.sender, recipient, amount);
+    }
+
+    function _stakeFor(address caller, address recipient, uint256 amount)
+        internal
+        returns (uint256 votingTokensMinted)
+    {
+        if (recipient == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+
+        _checkpointAllRewards(recipient);
+        _refreshParticipationHistory(recipient);
+        GOVERNANCE_TOKEN.safeTransferFrom(caller, address(this), amount);
+        _mint(recipient, amount);
+        if (delegates(recipient) == address(0)) {
+            _delegate(recipient, recipient);
+        }
+        _setParticipationWorkingWeight(recipient);
+        _startReadyCycles();
+        emit Staked(caller, recipient, amount);
+        return amount;
+    }
+
+    function requestWithdrawal(uint256 amount, address receiver) external nonReentrant returns (uint256 id) {
+        return _requestWithdrawal(msg.sender, amount, receiver);
+    }
+
+    function requestWithdrawalWithProposalSync(
+        uint256 amount,
+        address receiver,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant returns (uint256 id) {
+        _registerFinalizedProposalsWithSignature(expectedStartIndex, proposalIds, deadline, signature);
+        return _requestWithdrawal(msg.sender, amount, receiver);
+    }
+
+    function _requestWithdrawal(address account, uint256 amount, address receiver)
+        internal
+        returns (uint256 id)
+    {
+        if (receiver == address(0)) revert ZeroAddress();
+        if (amount == 0) revert ZeroAmount();
+        if (balanceOf(account) < amount) revert InsufficientStake();
+
+        _checkpointAllRewards(account);
+        _refreshParticipationHistory(account);
+        _burn(account, amount);
+        _setParticipationWorkingWeight(account);
+        _startReadyCycles();
+
+        uint256 standardFeeBps = withdrawTaxBps;
+        uint256 baseFeeBps = baseWithdrawFeeBps;
+        uint256 holdTime = withdrawHoldTime;
+        if (holdTime == 0) {
+            uint256 feeBps = standardFeeBps + baseFeeBps;
+            uint256 fee = Math.mulDiv(amount, feeBps, BPS);
+            if (fee != 0) GOVERNANCE_TOKEN.safeTransfer(treasuryReceiver, fee);
+            GOVERNANCE_TOKEN.safeTransfer(receiver, amount - fee);
+            emit WithdrawalCompleted(0, account, receiver, amount - fee, fee);
+            return 0;
+        }
+
+        if (amount > type(uint128).max) revert ValueTooLarge();
+        id = nextWithdrawalId++;
+        uint64 requestedAt = uint64(block.timestamp);
+        uint64 unlockTime = uint64(block.timestamp + holdTime);
+        withdrawalRequests[id] = WithdrawalRequest(
+            account,
+            receiver,
+            uint128(amount),
+            uint16(standardFeeBps),
+            uint16(baseFeeBps),
+            requestedAt,
+            unlockTime,
+            false
+        );
+        emit WithdrawalRequested(
+            id, account, receiver, amount, standardFeeBps, baseFeeBps, unlockTime
+        );
+    }
+
+    function completeWithdrawal(uint256 id) external nonReentrant returns (uint256 netAmount) {
+        WithdrawalRequest storage request = withdrawalRequests[id];
+        if (request.owner == address(0) || request.completed) revert InvalidWithdrawalRequest();
+        if (block.timestamp < request.unlockTime) revert WithdrawalNotReady();
+        netAmount = _settleWithdrawal(request, id, request.baseFeeBps, false);
+        _startReadyCycles();
+    }
+
+    function completeWithdrawalEarly(uint256 id) external nonReentrant returns (uint256 netAmount) {
+        WithdrawalRequest storage request = withdrawalRequests[id];
+        if (request.owner == address(0) || request.completed) revert InvalidWithdrawalRequest();
+        if (msg.sender != request.owner) revert NotWithdrawalOwner();
+        if (block.timestamp >= request.unlockTime) revert WithdrawalAlreadyReady();
+        if (request.standardFeeBps == 0) revert EarlyWithdrawalDisabled();
+        uint256 feeBps = currentEarlyWithdrawalFeeBps(id);
+        netAmount = _settleWithdrawal(request, id, feeBps, true);
+        _startReadyCycles();
+    }
+
+    function currentEarlyWithdrawalFeeBps(uint256 id) public view returns (uint256 feeBps) {
+        WithdrawalRequest memory request = withdrawalRequests[id];
+        if (request.owner == address(0) || request.completed) return 0;
+        uint256 duration = uint256(request.unlockTime) - uint256(request.requestedAt);
+        if (duration == 0 || block.timestamp >= request.unlockTime) return request.baseFeeBps;
+        uint256 elapsed = block.timestamp - uint256(request.requestedAt);
+        uint256 maximumReduction = Math.mulDiv(
+            request.standardFeeBps, EARLY_STANDARD_FEE_REDUCTION_BPS, BPS
+        );
+        uint256 standardFeeReduction = Math.mulDiv(maximumReduction, elapsed, duration);
+        feeBps = uint256(request.baseFeeBps)
+            + uint256(request.standardFeeBps)
+            - standardFeeReduction;
+    }
+
+    function _settleWithdrawal(
+        WithdrawalRequest storage request,
+        uint256 id,
+        uint256 feeBps,
+        bool early
+    ) internal returns (uint256 netAmount) {
+        request.completed = true;
+        uint256 amount = request.amount;
+        uint256 fee = Math.mulDiv(amount, feeBps, BPS);
+        netAmount = amount - fee;
+        if (fee != 0) GOVERNANCE_TOKEN.safeTransfer(treasuryReceiver, fee);
+        GOVERNANCE_TOKEN.safeTransfer(request.receiver, netAmount);
+        if (early) {
+            emit EarlyWithdrawalCompleted(
+                id, request.owner, request.receiver, netAmount, fee, feeBps
+            );
+        } else {
+            emit WithdrawalCompleted(id, request.owner, request.receiver, netAmount, fee);
+        }
+    }
+
+    /// @notice Queues an ordinary reward batch for the next eligible fourteen-day stream.
+    function notifyReward(address token, uint256 amount) external nonReentrant {
+        _notifyReward(token, amount, false);
+    }
+
+    function notifyParticipationReward(address token, uint256 amount) external nonReentrant {
+        _notifyReward(token, amount, true);
+    }
+
+    function _notifyReward(address token, uint256 amount, bool participationReward) internal {
+        if (msg.sender != owner() && !isNotifier[msg.sender]) revert NotNotifier();
+        if (!isRewardToken[token]) revert UnsupportedRewardToken();
+        if (amount == 0) revert ZeroAmount();
+
+        if (participationReward) _checkpointParticipationReward(token);
+        else _checkpointReward(token);
+
+        uint256 beforeBalance = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = IERC20(token).balanceOf(address(this)) - beforeBalance;
+        if (received != amount) revert NonExactRewardTransfer(amount, received);
+
+        RewardData storage data = participationReward
+            ? _participationRewardData[token]
+            : _rewardData[token];
+        _queueReward(data, token, amount, participationReward);
+    }
+
+    function startRewardCycle(address token)
+        external
+        nonReentrant
+        returns (uint256 ordinaryAmount, uint256 participationAmount)
+    {
+        if (!isRewardToken[token]) revert UnsupportedRewardToken();
+        _checkpointReward(token);
+        _checkpointParticipationReward(token);
+        ordinaryAmount = _startRewardCycle(
+            _rewardData[token], token, totalRewardEligibleSupply, false, false
+        );
+        participationAmount = _startRewardCycle(
+            _participationRewardData[token], token, totalParticipationWeight, true, false
+        );
+        if (ordinaryAmount == 0 && participationAmount == 0) revert RewardCycleNotReady();
+    }
+
+    function startRewardCycle(address token, bool participationReward)
+        external
+        nonReentrant
+        returns (uint256 amount)
+    {
+        if (!isRewardToken[token]) revert UnsupportedRewardToken();
+        if (participationReward) {
+            _checkpointParticipationReward(token);
+            amount = _startRewardCycle(
+                _participationRewardData[token], token, totalParticipationWeight, true, true
+            );
+        } else {
+            _checkpointReward(token);
+            amount = _startRewardCycle(
+                _rewardData[token], token, totalRewardEligibleSupply, false, true
+            );
+        }
+    }
+
+    function claimRewards(address receiver) external nonReentrant {
+        _claimRewards(msg.sender, receiver);
+    }
+
+    function claimRewardsWithProposalSync(
+        address receiver,
+        uint256 expectedStartIndex,
+        uint256[] calldata proposalIds,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant {
+        _registerFinalizedProposalsWithSignature(expectedStartIndex, proposalIds, deadline, signature);
+        _claimRewards(msg.sender, receiver);
+    }
+
+    function _claimRewards(address account, address receiver) internal {
+        if (receiver == address(0)) revert ZeroAddress();
+        _checkpointAllRewards(account);
+        _refreshParticipationHistory(account);
+        _setParticipationWorkingWeight(account);
+        _startReadyCycles();
+
+        for (uint256 i; i < rewardTokens.length; ++i) {
+            address token = rewardTokens[i];
+            uint256 amount = accruedRewards[account][token] + accruedParticipationRewards[account][token];
+            if (amount == 0) continue;
+            accruedRewards[account][token] = 0;
+            accruedParticipationRewards[account][token] = 0;
+            IERC20(token).safeTransfer(receiver, amount);
+            emit RewardClaimed(account, token, receiver, amount);
+        }
+    }
+
+    function earned(address user, address token) external view returns (uint256 amount) {
+        if (!isRewardToken[token]) return 0;
+
+        uint256 ordinaryRewardPerToken = _previewReward(token);
+        amount = accruedRewards[user][token]
+            + Math.mulDiv(
+                _rewardEligibleBalance(user),
+                ordinaryRewardPerToken - userRewardPerTokenPaid[user][token],
+                PRECISION
+            );
+
+        uint256 participationRewardPerWeight = _previewParticipationReward(token);
+        amount += accruedParticipationRewards[user][token]
+            + Math.mulDiv(
+                participationWeight(user),
+                participationRewardPerWeight - userParticipationRewardPerWeightPaid[user][token],
+                PRECISION
+            );
+    }
+
+    function _checkpointRewardUser(address account, address token) internal {
+        RewardData storage data = _rewardData[token];
+        uint256 current = data.rewardPerTokenStored;
+        uint256 paid = userRewardPerTokenPaid[account][token];
+        if (current != paid) {
+            accruedRewards[account][token] += Math.mulDiv(
+                _rewardEligibleBalance(account), current - paid, PRECISION
+            );
+            userRewardPerTokenPaid[account][token] = current;
+        }
+    }
+
+    function _checkpointParticipationUser(address account, address token) internal {
+        RewardData storage data = _participationRewardData[token];
+        uint256 current = data.rewardPerTokenStored;
+        uint256 paid = userParticipationRewardPerWeightPaid[account][token];
+        if (current != paid) {
+            accruedParticipationRewards[account][token] += Math.mulDiv(
+                participationWorkingWeight[account], current - paid, PRECISION
+            );
+            userParticipationRewardPerWeightPaid[account][token] = current;
+        }
+    }
+
+    function _checkpointAllRewards(address account) internal {
+        for (uint256 i; i < rewardTokens.length; ++i) {
+            address token = rewardTokens[i];
+            _checkpointReward(token);
+            _checkpointParticipationReward(token);
+            if (account != address(0)) {
+                _checkpointRewardUser(account, token);
+                _checkpointParticipationUser(account, token);
+            }
+        }
+    }
+
+    function _checkpointReward(address token) internal {
+        _checkpointRewardData(_rewardData[token], token, totalRewardEligibleSupply, false);
+    }
+
+    function _checkpointParticipationReward(address token) internal {
+        _checkpointRewardData(_participationRewardData[token], token, totalParticipationWeight, true);
+    }
+
+    function _checkpointRewardData(
+        RewardData storage data,
+        address token,
+        uint256 supply,
+        bool participationReward
+    ) internal {
+        uint256 from = data.lastUpdate;
+        uint256 to = block.timestamp;
+        if (from == 0) {
+            data.lastUpdate = uint64(to);
+            return;
+        }
+        if (to == from) return;
+
+        uint256 gross = _streamedBetween(data, from, to);
+        if (gross != 0) {
+            if (supply == 0) {
+                data.pendingRewards += gross;
+                if (data.pendingSince == 0) data.pendingSince = uint64(to);
+                emit RewardDeferred(token, gross, participationReward);
+            } else {
+                uint256 scaled = gross * PRECISION + data.scaledRemainder;
+                data.rewardPerTokenStored += scaled / supply;
+                data.scaledRemainder = scaled % supply;
+            }
+        }
+        data.lastUpdate = uint64(to);
+
+        uint256 head = data.streamHead;
+        while (head < data.streams.length && data.streams[head].end <= to) ++head;
+        data.streamHead = uint64(head);
+    }
+
+    function _previewReward(address token) internal view returns (uint256) {
+        return _previewRewardData(_rewardData[token], totalRewardEligibleSupply);
+    }
+
+    function _previewParticipationReward(address token) internal view returns (uint256) {
+        return _previewRewardData(_participationRewardData[token], totalParticipationWeight);
+    }
+
+    function _previewRewardData(RewardData storage data, uint256 supply)
+        internal
+        view
+        returns (uint256 rewardPerToken)
+    {
+        rewardPerToken = data.rewardPerTokenStored;
+        if (data.lastUpdate == 0 || data.lastUpdate == block.timestamp || supply == 0) {
+            return rewardPerToken;
+        }
+        uint256 gross = _streamedBetween(data, data.lastUpdate, block.timestamp);
+        if (gross == 0) return rewardPerToken;
+        return rewardPerToken + (gross * PRECISION + data.scaledRemainder) / supply;
+    }
+
+    function _streamedBetween(RewardData storage data, uint256 from, uint256 to)
+        internal
+        view
+        returns (uint256 gross)
+    {
+        for (uint256 i = data.streamHead; i < data.streams.length; ++i) {
+            Stream storage stream = data.streams[i];
+            if (stream.start >= to) break;
+            gross += _vested(stream.amount, stream.start, stream.end, to)
+                - _vested(stream.amount, stream.start, stream.end, from);
+        }
+    }
+
+    function _queueReward(
+        RewardData storage data,
+        address token,
+        uint256 amount,
+        bool participationReward
+    ) internal {
+        data.pendingRewards += amount;
+        if (data.pendingSince == 0) data.pendingSince = uint64(block.timestamp);
+        emit RewardQueued(
+            token, amount, participationReward, _rewardCycleReadyAt(data)
+        );
+    }
+
+    function _rewardCycleReadyAt(RewardData storage data) internal view returns (uint256 readyAt) {
+        if (data.pendingSince == 0) return 0;
+        readyAt = uint256(data.pendingSince) + REWARD_CYCLE_INTERVAL;
+        uint256 nextAfterPrevious = uint256(data.lastStreamStart) + REWARD_CYCLE_INTERVAL;
+        if (nextAfterPrevious > readyAt) readyAt = nextAfterPrevious;
+    }
+
+    function _startReadyCycles() internal {
+        for (uint256 i; i < rewardTokens.length; ++i) {
+            address token = rewardTokens[i];
+            _startRewardCycle(_rewardData[token], token, totalRewardEligibleSupply, false, false);
+            _startRewardCycle(
+                _participationRewardData[token], token, totalParticipationWeight, true, false
+            );
+        }
+    }
+
+    function _startRewardCycle(
+        RewardData storage data,
+        address token,
+        uint256 supply,
+        bool participationReward,
+        bool strict
+    ) internal returns (uint256 amount) {
+        amount = data.pendingRewards;
+        if (amount == 0 || supply == 0) {
+            if (strict) revert RewardCycleNotReady();
+            return 0;
+        }
+        if (data.streams.length - uint256(data.streamHead) >= MAX_ACTIVE_STREAMS_PER_TOKEN) {
+            if (strict) revert ActiveStreamLimit();
+            return 0;
+        }
+        uint256 readyAt = _rewardCycleReadyAt(data);
+        if (readyAt == 0 || block.timestamp < readyAt) {
+            if (strict) revert RewardCycleNotReady();
+            return 0;
+        }
+
+        data.pendingRewards = 0;
+        data.pendingSince = 0;
+        data.lastStreamStart = uint64(block.timestamp);
+        uint64 start = uint64(block.timestamp);
+        uint64 end = uint64(block.timestamp + STREAM_DURATION);
+        data.streams.push(Stream(amount, start, end));
+        if (participationReward) emit ParticipationRewardNotified(token, amount, end);
+        else emit RewardNotified(token, amount, end);
+    }
+
+    function _rewardEligibleBalance(address account) internal view returns (uint256 balance) {
+        balance = balanceOf(account);
+        if (balance < MIN_REWARD_ELIGIBLE_BALANCE) return 0;
+    }
+
+    function _refreshParticipationHistory(address account)
+        internal
+        returns (uint256 evaluatedProposals)
+    {
+        IGovernanceBoostStrategy strategy = governanceBoostStrategy;
+        if (address(strategy) == address(0)) return 0;
+        evaluatedProposals = strategy.refreshParticipationHistory(account);
+    }
+
+    function _setParticipationWorkingWeight(address account) internal {
+        uint256 oldWeight = participationWorkingWeight[account];
+        uint256 newWeight = _weightForBalance(account, balanceOf(account));
+        if (oldWeight == newWeight) return;
+        participationWorkingWeight[account] = newWeight;
+        totalParticipationWeight = totalParticipationWeight - oldWeight + newWeight;
+        emit ParticipationWorkingWeightUpdated(
+            account, oldWeight, newWeight, totalParticipationWeight
+        );
+    }
+
+    function _weightForBalance(address account, uint256 balance) internal view returns (uint256) {
+        return Math.mulDiv(balance, participationMultiplierBps(account), BPS);
+    }
+
+    function _vested(uint256 amount, uint256 start, uint256 end, uint256 timestamp)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (timestamp <= start) return 0;
+        if (timestamp >= end) return amount;
+        return Math.mulDiv(amount, timestamp - start, end - start);
+    }
+
+    function _delegate(address account, address delegatee) internal override {
+        super._delegate(account, delegatee);
+        _delegateCheckpoints[account].push(uint96(clock()), uint160(delegatee));
+    }
+
+    function _update(address from, address to, uint256 value) internal override {
+        if (from != address(0) && to != address(0)) revert NonTransferable();
+        uint256 oldFromBalance = from == address(0) ? 0 : balanceOf(from);
+        uint256 oldToBalance = to == address(0) ? 0 : balanceOf(to);
+
+        super._update(from, to, value);
+        uint48 timepoint = clock();
+
+        if (from != address(0)) {
+            uint256 newFromBalance = balanceOf(from);
+            _balanceCheckpoints[from].push(timepoint, SafeCast.toUint208(newFromBalance));
+            if (oldFromBalance != 0 && newFromBalance == 0) {
+                unchecked {
+                    --activeStakerCount;
+                }
+            }
+        }
+
+        if (to != address(0)) {
+            uint256 newToBalance = balanceOf(to);
+            _balanceCheckpoints[to].push(timepoint, SafeCast.toUint208(newToBalance));
+            if (oldToBalance == 0 && newToBalance != 0) {
+                unchecked {
+                    ++activeStakerCount;
+                }
+                if (!hasEverStaked[to]) {
+                    hasEverStaked[to] = true;
+                    _governanceStakers.push(to);
+                }
+            }
+        }
+
+        _updateRewardEligibleSupply(from, to, oldFromBalance, oldToBalance, timepoint);
+    }
+
+    function _updateRewardEligibleSupply(
+        address from,
+        address to,
+        uint256 oldFromBalance,
+        uint256 oldToBalance,
+        uint48 timepoint
+    ) internal {
+        uint256 oldSupply = totalRewardEligibleSupply;
+        if (from != address(0)) {
+            uint256 oldEligible = oldFromBalance >= MIN_REWARD_ELIGIBLE_BALANCE ? oldFromBalance : 0;
+            uint256 newBalance = balanceOf(from);
+            uint256 newEligible = newBalance >= MIN_REWARD_ELIGIBLE_BALANCE ? newBalance : 0;
+            totalRewardEligibleSupply = totalRewardEligibleSupply - oldEligible + newEligible;
+        }
+        if (to != address(0)) {
+            uint256 oldEligible = oldToBalance >= MIN_REWARD_ELIGIBLE_BALANCE ? oldToBalance : 0;
+            uint256 newBalance = balanceOf(to);
+            uint256 newEligible = newBalance >= MIN_REWARD_ELIGIBLE_BALANCE ? newBalance : 0;
+            totalRewardEligibleSupply = totalRewardEligibleSupply - oldEligible + newEligible;
+        }
+        if (totalRewardEligibleSupply != oldSupply) {
+            _rewardEligibleSupplyCheckpoints.push(timepoint, SafeCast.toUint208(totalRewardEligibleSupply));
+        }
+    }
+}
