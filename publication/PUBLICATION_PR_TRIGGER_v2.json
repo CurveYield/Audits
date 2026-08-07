@@ -1,0 +1,7 @@
+{
+  "schemaVersion":"deep-assurance-publication-pr-trigger-v2",
+  "campaignId":"deep-assurance-v16-2-erc20-rehearsal-v2",
+  "baseBranch":"rehearsal/deep-assurance-v16-2-erc20-v2-g2",
+  "purpose":"Execute trusted base-branch publication workflow and publish/fetch-back final packet",
+  "requestSequence":1
+}
