@@ -1,0 +1,7 @@
+{
+  "schemaVersion": "deep-assurance-delivery-artifact-run-v3",
+  "runId": 31138470029,
+  "triggerCommit": "1cad01a8e83eb8f7dd4dc35a3411448b1d93f99c",
+  "artifactName": "deep-assurance-v16-2-erc20-final-packet-v3",
+  "packetPath": "deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/"
+}
