@@ -1,0 +1,78 @@
+name: Deep Assurance Publication v2
+
+on:
+  push:
+    branches:
+      - rehearsal/deep-assurance-v16-2-erc20-v2-g2
+    paths:
+      - publication/PUBLICATION_BUILD_REQUEST_v2.json
+
+permissions:
+  contents: write
+  statuses: write
+
+env:
+  PACKET_DIR: Deep_Assurance_v16_2_ERC20_Rehearsal_v2/FINAL_AUDIT_PACKET_v2
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact publication request
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install GitHub-runner-only publication dependency
+        run: python -m pip install --disable-pip-version-check reportlab==4.2.5
+
+      - name: Configure publication committer
+        run: |
+          git config user.name "Deep Assurance Publication Bot"
+          git config user.email "deep-assurance-publication@users.noreply.github.com"
+
+      - name: Build, publish, and fetch back final packet
+        env:
+          REQUEST_SHA: ${{ github.sha }}
+        run: python publication/build_publication_v2.py
+
+      - name: Upload exact final packet as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deep-assurance-erc20-final-packet-v2
+          path: ${{ env.PACKET_DIR }}/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record publication success status
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_SHA: ${{ github.sha }}
+        run: |
+          curl --fail-with-body -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REQUEST_SHA}" \
+            -d "{\"state\":\"success\",\"context\":\"deep-assurance/publication-v2\",\"description\":\"Final packet published and fetch-back verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
+
+      - name: Record publication failure status
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUEST_SHA: ${{ github.sha }}
+        run: |
+          curl -L -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REQUEST_SHA}" \
+            -d "{\"state\":\"failure\",\"context\":\"deep-assurance/publication-v2\",\"description\":\"Publication or fetch-back verification failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
