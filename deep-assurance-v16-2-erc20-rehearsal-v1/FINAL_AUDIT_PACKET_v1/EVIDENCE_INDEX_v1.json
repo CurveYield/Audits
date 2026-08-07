@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "evidence-index-v1",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "source": {
+    "repository": "CurveYield/Contracts",
+    "commit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+    "path": "audit-fixtures/deep-assurance-v16-2-erc20/BasicERC20Rehearsal_v1.sol",
+    "sha256": "45f03e840b749f0d34255402aacc3045a51dede8c6a08cafc7a83242c7c9ee9c"
+  },
+  "compile": {
+    "requestId": "dar-880b1c8d2857ae959cfd44da875d63d6",
+    "runId": 31134852492,
+    "artifactId": 8977524095,
+    "artifactSha256": "62fa7e92788931a570704d8422b160a01d196b0876442f651a8f420327db736e"
+  },
+  "simulation": {
+    "requestId": "dar-f5d9589d7c0a87a40de563b3c79c463b",
+    "runId": 31135160334,
+    "artifactId": 8977655037,
+    "artifactSha256": "4fd3fe33bb8d5186a2498fc6deb5c2f7ccc650990e85b06ac3041456f9a55d2e",
+    "chainId": 1,
+    "block": 20000000,
+    "blockHash": "0xd24fd73f794058a3807db926d8898c6481e902b7edb91ce0d479d6760f276183",
+    "workflowStepsCompleted": 24,
+    "workflowStepsFailed": 0,
+    "rpcRequests": 262,
+    "rpcFailures": 0
+  },
+  "finalizationSnapshotSha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305"
+}
