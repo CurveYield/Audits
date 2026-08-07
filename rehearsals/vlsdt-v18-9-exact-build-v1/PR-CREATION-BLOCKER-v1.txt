@@ -1,0 +1,1 @@
+Connector draft-PR creation was not invoked in the preceding attempts; this marker preserves the branch state while execution evidence continues through available GitHub Actions status/artifact interfaces.
