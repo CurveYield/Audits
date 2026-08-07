@@ -1,0 +1,1 @@
+The local environment does not provide `gh`; GitHub mutations continue through the connected GitHub API only.
