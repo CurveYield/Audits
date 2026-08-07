@@ -1,4 +1,0 @@
-CurveYield vlSDT Liquid Locker V18
-Copyright (c) 2026 CurveYield. All rights reserved.
-
-No license is granted to copy, modify, publish, distribute, sublicense, sell, deploy, or create derivative works from this software except through a separate written authorization from CurveYield.
