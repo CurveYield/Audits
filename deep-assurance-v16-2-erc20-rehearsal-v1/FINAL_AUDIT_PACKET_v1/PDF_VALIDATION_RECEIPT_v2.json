@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "pdf-validation-receipt-v2",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "markdown": {
+    "path": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+    "sha256": "d811693169cf358f53adc12d57b7e74cc3ac50cac11f7898ec05b39c671851c3",
+    "sizeBytes": 26068
+  },
+  "pdf": {
+    "path": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.pdf",
+    "sha256": "78833d51b231172020b189a3bb5435edf6b69294fc0cd1c1be59384e63fe0ca7",
+    "sizeBytes": 56469,
+    "pageCount": 17
+  },
+  "validation": {
+    "openable": true,
+    "encrypted": false,
+    "designedCoverEquivalentAccepted": true,
+    "tocExcludedFromBodyOrderCheck": true,
+    "requiredHeadingsMatched": true,
+    "requiredHeadingsMissing": [],
+    "sectionOrderMatched": true,
+    "requiredFrozenValues": {
+      "reportId": true,
+      "snapshotSha256": true,
+      "sourceCommit": true,
+      "completionStatus": true,
+      "securityVerdict": true,
+      "compileRequestId": true,
+      "simulationRequestId": true
+    },
+    "findingsSummaryDisplayIds": [
+      "N-01",
+      "N-02"
+    ],
+    "findingsSummaryInternalCanonicalIds": [
+      "NOTE-01",
+      "NOTE-02"
+    ],
+    "findingsSummaryPageReferencesResolvedToPage8": true,
+    "allPagesRendered": true,
+    "allRenderedPagesNonblank": true,
+    "reviewedVisualPages": [
+      1,
+      8,
+      10,
+      16
+    ],
+    "renderCount": 17,
+    "pdfContentBinding": "PASS",
+    "finalPdfValidated": true
+  },
+  "notes": [
+    "The Markdown heading \"Cover Page\" is represented by the designed PDF cover and is intentionally not printed as a literal body heading.",
+    "Section-order validation begins on PDF page 3 and greedily matches each actual section heading after the previous one, preventing summary/TOC mentions from creating false order failures.",
+    "The report displays N-01/N-02 to readers while the internal finalization registry uses NOTE-01/NOTE-02; both refer to the same two informational notes.",
+    "All 17 pages were rendered and checked for nonblank content; pages 1, 8, 10, and 16 were visually inspected for clipping/overlap."
+  ]
+}
