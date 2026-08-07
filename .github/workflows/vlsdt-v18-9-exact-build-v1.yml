@@ -39,11 +39,23 @@ jobs:
           set -euo pipefail
           git -C exact-source rev-parse HEAD | tee exact-source-commit-v1.txt
           test "$(cat exact-source-commit-v1.txt)" = "1f63e0306ac35fdc4a8416064cc7aa606846e163"
-          sha256sum "exact-source/$PROJECT_PATH/package-lock.json" "exact-source/$PROJECT_PATH/hardhat.config.js" | tee exact-build-input-hashes-v1.txt
-      - name: Install exact pinned package dependencies
+          sha256sum "exact-source/$PROJECT_PATH/package-lock.json.bad" "exact-source/$PROJECT_PATH/package.json" "exact-source/$PROJECT_PATH/hardhat.config.js" | tee exact-build-input-hashes-v1.txt
+      - name: Prepare exact shipped lock for public npm transport
         shell: bash
         working-directory: exact-source/${{ env.PROJECT_PATH }}
-        run: npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee ../../npm-ci-v1.log
+        run: |
+          set -euo pipefail
+          cp package-lock.json.bad package-lock.json
+          sed -i 's#https://packages\.applied-caas-gateway1\.internal\.api\.openai\.org/artifactory/api/npm/npm-public/#https://registry.npmjs.org/#g' package-lock.json
+          sha256sum package-lock.json | tee ../../sanitized-lock-sha256-v1.txt
+      - name: Install exact locked package dependencies
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm ci --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org 2>&1 | tee ../../npm-ci-v1.log
+      - name: Record installed top-level versions
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm ls --depth=0 2>&1 | tee ../../npm-top-level-v1.txt
       - name: Clean exact package
         shell: bash
         working-directory: exact-source/${{ env.PROJECT_PATH }}
@@ -66,10 +78,13 @@ jobs:
         run: npm run test:v18 2>&1 | tee ../../tests-v1.log
       - name: Record exact artifacts manifest
         shell: bash
+        if: always()
         run: |
           set -euo pipefail
-          find "exact-source/$PROJECT_PATH/artifacts-v18" -type f -print0 | sort -z | xargs -0 sha256sum > exact-artifacts-sha256-v1.txt
-          find "exact-source/$PROJECT_PATH/artifacts-v18" -type f | sort > exact-artifacts-files-v1.txt
+          if [ -d "exact-source/$PROJECT_PATH/artifacts-v18" ]; then
+            find "exact-source/$PROJECT_PATH/artifacts-v18" -type f -print0 | sort -z | xargs -0 sha256sum > exact-artifacts-sha256-v1.txt
+            find "exact-source/$PROJECT_PATH/artifacts-v18" -type f | sort > exact-artifacts-files-v1.txt
+          fi
       - name: Upload exact build evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,7 +94,9 @@ jobs:
           path: |
             exact-source-commit-v1.txt
             exact-build-input-hashes-v1.txt
+            sanitized-lock-sha256-v1.txt
             npm-ci-v1.log
+            npm-top-level-v1.txt
             clean-v1.log
             compile-v1.log
             size-v1.log
