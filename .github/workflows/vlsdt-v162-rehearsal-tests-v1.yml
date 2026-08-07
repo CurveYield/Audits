@@ -6,6 +6,11 @@ on:
       - rehearsal/vlsdt-v18-9-v162-tests-7dee48511a
     paths:
       - .github/workflows/vlsdt-v162-rehearsal-tests-v1.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/vlsdt-v162-rehearsal-tests-v1.yml
 
 permissions:
   contents: read
@@ -28,7 +33,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
           git diff --exit-code "$SOURCE_COMMIT" HEAD -- "$PROJECT_PATH"
           git rev-parse "$SOURCE_COMMIT" > "$RUNNER_TEMP/source-commit.txt"
           git ls-tree -r "$SOURCE_COMMIT" -- "$PROJECT_PATH" > "$RUNNER_TEMP/source-tree.txt"
