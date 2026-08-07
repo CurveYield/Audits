@@ -6,6 +6,11 @@ on:
       - rehearsal/deep-assurance-v16-2-erc20-v2-g2
     paths:
       - publication/PUBLICATION_BUILD_REQUEST_v2.json
+  pull_request:
+    branches:
+      - rehearsal/deep-assurance-v16-2-erc20-v2-g2
+    paths:
+      - publication/PUBLICATION_PR_TRIGGER_v2.json
 
 permissions:
   contents: write
@@ -19,7 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout exact publication request
+      - name: Checkout publication branch for PR-triggered execution
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: rehearsal/deep-assurance-v16-2-erc20-v2-g2
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Checkout exact publication request for push execution
+        if: github.event_name == 'push'
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -39,8 +53,6 @@ jobs:
           git config user.email "deep-assurance-publication@users.noreply.github.com"
 
       - name: Build, publish, and fetch back final packet
-        env:
-          REQUEST_SHA: ${{ github.sha }}
         run: python publication/build_publication_v2.py
 
       - name: Upload exact final packet as workflow artifact
@@ -55,24 +67,24 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUEST_SHA: ${{ github.sha }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           curl --fail-with-body -L -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REQUEST_SHA}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" \
             -d "{\"state\":\"success\",\"context\":\"deep-assurance/publication-v2\",\"description\":\"Final packet published and fetch-back verified\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
 
       - name: Record publication failure status
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUEST_SHA: ${{ github.sha }}
+          STATUS_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           curl -L -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${REQUEST_SHA}" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${STATUS_SHA}" \
             -d "{\"state\":\"failure\",\"context\":\"deep-assurance/publication-v2\",\"description\":\"Publication or fetch-back verification failed\",\"target_url\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\"}"
