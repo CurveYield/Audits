@@ -20,22 +20,22 @@
     {
       "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.pdf",
       "bytes": 22808,
-      "sha256": "5a82b7d551253d9f66d381d5faa2706402c3dd5a6e9512595256bcab4b997219"
+      "sha256": "6c62410c944c3af237ebd4d4af6eb057df4938fe049fcc92bd4b2172e15ed9d5"
     },
     {
       "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v2.zip",
-      "bytes": 4849,
-      "sha256": "2204a932745a379b10b89d207dd0e9e186a7ae58cfe7ff1d562a00199ef0aa97"
+      "bytes": 4926,
+      "sha256": "c0802719c11066f99ffe67bccf61ce18374c8d700aa5d452ab1cfa8304c6f858"
     },
     {
       "filename": "EXTERNAL_ARTIFACT_DIGEST_RECEIPT_v2.json",
       "bytes": 882,
-      "sha256": "a4008dd9e1fbfb296e1a9f2c4f8a67b48c765e7d85efa6f510917d4525d81641"
+      "sha256": "657a7fdd36d64111cc8d6070b1016e6c86e2a3c840e4d7c329db237b472e3939"
     },
     {
       "filename": "PDF_VALIDATION_RECEIPT_v2.json",
       "bytes": 286,
-      "sha256": "08fcc008e9800b91a39d41dddfdc681b01cb1f767f5ba10e6cfdc9a29d6d7551"
+      "sha256": "0f9c57299127064ef274d7212123910ebb142d944eef8dedb9ec5acfa3c4a081"
     }
   ],
   "sourceCommit": "248e5d5de42f8a111050fb8d2b7d587653833331",

@@ -41,6 +41,11 @@
       "path": "supporting/REMEDIATION_LEDGER_v2.md",
       "bytes": 175,
       "sha256": "bcaa1aec42dd101a44af7162a61756f487738f65569ef60712825357eae35bbc"
+    },
+    {
+      "path": "supporting/SUPPORTING_ARCHIVE_CONTENT_MANIFEST_v2.json",
+      "bytes": 1554,
+      "sha256": "9b34df90a21acd16606a9af72f75674ca7517eea73de4d40b57bc20497f480a7"
     }
   ]
 }
