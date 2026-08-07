@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "deep-assurance-final-user-delivery-receipt-v3",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v1",
+  "publicationRevision": "v3",
+  "deliveredAt": "2026-08-07T03:37:12Z",
+  "deliverySurface": "current ChatGPT conversation",
+  "visibleDeliveryOccurredBeforeReceipt": true,
+  "deliveredArtifacts": [
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+      "sha256": "d811693169cf358f53adc12d57b7e74cc3ac50cac11f7898ec05b39c671851c3"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v3.pdf",
+      "sha256": "03adae96017a7f39fe76c7999b6f83e2c109090c3054145450b8af081535523a"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v3.zip",
+      "sha256": "e6e140c0353b8fd9aa0983429503cb28898c4174970d8c84e93ca1f2a77f7af3"
+    },
+    {
+      "filename": "PDF_VALIDATION_RECEIPT_v3.json"
+    }
+  ],
+  "completionStatusPresented": "COMPLETE",
+  "securityVerdictPresented": "PASS",
+  "findingCountsPresented": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 2
+  },
+  "status": "DELIVERED"
+}
