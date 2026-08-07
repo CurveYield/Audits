@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "deep-assurance-release-manifest-v1",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v1",
+  "source": {
+    "repository": "CurveYield/Contracts",
+    "commit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+    "projectPath": "audit-fixtures/deep-assurance-v16-2-erc20",
+    "sourceDrift": false
+  },
+  "skill": {
+    "release": "ai-auditor-deep-assurance-v6@16.2.0",
+    "zipSha256": "1866a3e1eed74d0d03e672effb9cead25a93420a4092260526c65c7462f69b5f",
+    "manifestSha256": "60fcf39add524e8813b6f42d49cb60aa43ac5baf1f83900fe24983d4375f9099"
+  },
+  "controller": {
+    "repository": "CurveYield/audit-controller",
+    "commit": "d09a925d4735da8acde24baf39a1de2fb90ddd2f"
+  },
+  "runner": {
+    "repository": "CurveYield/contract-automation",
+    "baseCommit": "ad11d7d5a623c1411cbabb4bb0cd9acf7975bce8",
+    "bridgeMergeCommit": "ffb482b9b2ec5bff57921e3c13bafd0ee64f1aed",
+    "release": "deep-assurance-github-bridge-v1",
+    "manifestSha256": "51fc7ef486a75a0593aaf9f8b54965424785e34198479f4ee74dd88168f53292"
+  },
+  "finalizationSnapshot": {
+    "filename": "FINALIZATION_INPUT_SNAPSHOT_v1.json",
+    "sha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305"
+  },
+  "artifacts": {
+    "markdown": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+    "pdf": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.pdf",
+    "supportingArchive": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v1.zip",
+    "pdfPageCount": 17,
+    "pdfValidationReceipt": "PDF_VALIDATION_RECEIPT_v2.json"
+  },
+  "plannedExternalRecords": [
+    "ARTIFACT_DIGEST_RECEIPT_v1.json",
+    "PUBLICATION_MANIFEST_v1.json",
+    "PUBLICATION_MANIFEST_FETCHBACK_RECEIPT_v1.json",
+    "FINAL_USER_DELIVERY_RECEIPT_v1.json"
+  ],
+  "publication": {
+    "repository": "CurveYield/Audits",
+    "branch": "rehearsal/deep-assurance-v16-2-erc20-v1",
+    "packetPath": "deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v1/"
+  },
+  "phase10StateAtManifestCreation": "PENDING",
+  "completionStatus": "COMPLETE",
+  "securityVerdict": "PASS",
+  "formalFindingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 2
+  },
+  "publicationGraphNote": "Artifact hashes are recorded externally after Markdown, PDF, and archive bytes are final; this manifest intentionally does not contain the archive digest."
+}
