@@ -1,0 +1,48 @@
+name: Deep Assurance publication v3
+
+on:
+  push:
+    branches:
+      - rehearsal/deep-assurance-v16-2-erc20-v1
+    paths:
+      - .github/workflows/deep-assurance-publication-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact rehearsal branch
+        uses: actions/checkout@v4
+        with:
+          ref: rehearsal/deep-assurance-v16-2-erc20-v1
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install PDF renderer dependency
+        run: python -m pip install --disable-pip-version-check reportlab==4.2.5
+
+      - name: Generate exact publication v3 artifacts
+        run: python deep-assurance-v16-2-erc20-rehearsal-v1/publication/build_publication_v3.py
+
+      - name: Verify generated files exist
+        run: |
+          test -s deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md
+          test -s deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v3.pdf
+          test -s deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v3.zip
+          test -s deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/PUBLICATION_WORKFLOW_RESULT_v3.json
+
+      - name: Commit GitHub-generated publication bytes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3
+          git commit -m "Publish exact Deep Assurance ERC20 rehearsal packet v3 [skip ci]"
+          git push origin HEAD:rehearsal/deep-assurance-v16-2-erc20-v1
