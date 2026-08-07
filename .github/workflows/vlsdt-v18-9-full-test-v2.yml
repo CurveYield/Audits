@@ -1,0 +1,149 @@
+name: vlSDT V18.9 Full Test Rehearsal v2
+
+on:
+  push:
+    branches:
+      - rehearsal/vlsdt-v18-9-full-test-v1
+    paths:
+      - .github/workflows/vlsdt-v18-9-full-test-v2.yml
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      SOURCE_COMMIT: 1f63e0306ac35fdc4a8416064cc7aa606846e163
+      PROJECT: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/(U) CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route
+    steps:
+      - name: Check out exact-source lineage plus rehearsal workflow
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 3
+
+      - name: Prove audited source and tests are unchanged
+        id: integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$SOURCE_COMMIT^{commit}"
+          git diff --exit-code "$SOURCE_COMMIT" HEAD -- \
+            "$PROJECT/contracts" \
+            "$PROJECT/test" \
+            "$PROJECT/hardhat.config.js" \
+            "$PROJECT/package.json" \
+            "$PROJECT/scripts" \
+            "$PROJECT/deployment-v18" \
+            "$PROJECT/config-mainnet-v18.json"
+          mkdir -p "$RUNNER_TEMP/vlsdt-v18-9-evidence"
+          git diff --name-only "$SOURCE_COMMIT" HEAD > "$RUNNER_TEMP/vlsdt-v18-9-evidence/rehearsal-diff-v2.txt"
+          printf '%s\n' "$SOURCE_COMMIT" > "$RUNNER_TEMP/vlsdt-v18-9-evidence/source-commit-v2.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install package-pinned dependencies
+        id: install
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm install --ignore-scripts --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/npm-install-v2.txt"
+
+      - name: Run dependency-free static suite
+        id: static
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check:static:v18 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/static-checks-v2.txt"
+
+      - name: Clean compile exact V18.9 source
+        id: compile
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run clean:v18 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/clean-v2.txt"
+          npm run compile:v18 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/compile-v2.txt"
+
+      - name: Check compiled runtime sizes
+        id: size
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run size:v18 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/runtime-size-v2.txt"
+
+      - name: Run full Hardhat test suite
+        id: tests
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:v18 2>&1 | tee "$RUNNER_TEMP/vlsdt-v18-9-evidence/hardhat-tests-v2.txt"
+
+      - name: Record result matrix
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/vlsdt-v18-9-evidence"
+          cat > "$RUNNER_TEMP/vlsdt-v18-9-evidence/result-matrix-v2.txt" <<EOF
+          source_commit=$SOURCE_COMMIT
+          integrity=${{ steps.integrity.outcome }}
+          install=${{ steps.install.outcome }}
+          static=${{ steps.static.outcome }}
+          compile=${{ steps.compile.outcome }}
+          size=${{ steps.size.outcome }}
+          tests=${{ steps.tests.outcome }}
+          EOF
+
+      - name: Upload full-test rehearsal evidence
+        if: always()
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vlsdt-v18-9-full-test-rehearsal-v2
+          path: ${{ runner.temp }}/vlsdt-v18-9-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish terminal rehearsal status
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REHEARSAL_STATE: ${{ steps.integrity.outcome == 'success' && steps.install.outcome == 'success' && steps.static.outcome == 'success' && steps.compile.outcome == 'success' && steps.size.outcome == 'success' && steps.tests.outcome == 'success' && steps.upload.outcome == 'success' && 'success' || 'failure' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const response = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/statuses/${process.env.GITHUB_SHA}`, {
+            method: 'POST',
+            headers: {
+              accept: 'application/vnd.github+json',
+              authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+              'content-type': 'application/json',
+              'user-agent': 'curveyield-vlsdt-v18-9-full-test-rehearsal-v2',
+              'x-github-api-version': '2022-11-28'
+            },
+            body: JSON.stringify({
+              state: process.env.REHEARSAL_STATE,
+              context: 'deep-assurance/vlsdt-v18-9-full-tests-v2',
+              description: process.env.REHEARSAL_STATE === 'success' ? 'Exact-source full suite completed' : 'Exact-source full suite has one or more failures',
+              target_url: `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            })
+          });
+          if (!response.ok) throw new Error(`status publication failed: ${response.status} ${await response.text()}`);
+          NODE
+          test "$REHEARSAL_STATE" = success
