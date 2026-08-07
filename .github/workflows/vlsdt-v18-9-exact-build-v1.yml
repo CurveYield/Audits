@@ -1,0 +1,84 @@
+name: vlSDT v18.9 exact build rehearsal v1
+
+on:
+  push:
+    branches:
+      - rehearsal/vlsdt-v18-9-exact-build-v1
+    paths:
+      - .github/workflows/vlsdt-v18-9-exact-build-v1.yml
+
+permissions:
+  contents: read
+
+jobs:
+  exact-build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PROJECT_PATH: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/(U) CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route
+    steps:
+      - name: Check out workflow branch
+        uses: actions/checkout@v4
+      - name: Check out exact audited source commit
+        uses: actions/checkout@v4
+        with:
+          ref: 1f63e0306ac35fdc4a8416064cc7aa606846e163
+          path: exact-source
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Record source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C exact-source rev-parse HEAD | tee exact-source-commit-v1.txt
+          test "$(cat exact-source-commit-v1.txt)" = "1f63e0306ac35fdc4a8416064cc7aa606846e163"
+          sha256sum "exact-source/$PROJECT_PATH/package-lock.json" "exact-source/$PROJECT_PATH/hardhat.config.js" | tee exact-build-input-hashes-v1.txt
+      - name: Install exact pinned package dependencies
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm ci --ignore-scripts --no-audit --no-fund 2>&1 | tee ../../npm-ci-v1.log
+      - name: Clean exact package
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm run clean:v18 2>&1 | tee ../../clean-v1.log
+      - name: Compile using package Hardhat configuration
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm run compile:v18 2>&1 | tee ../../compile-v1.log
+      - name: Enforce contract size limits
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm run size:v18 2>&1 | tee ../../size-v1.log
+      - name: Run package static checks
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm run check:static:v18 2>&1 | tee ../../static-v1.log
+      - name: Run full v18 test suite
+        shell: bash
+        working-directory: exact-source/${{ env.PROJECT_PATH }}
+        run: npm run test:v18 2>&1 | tee ../../tests-v1.log
+      - name: Record exact artifacts manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "exact-source/$PROJECT_PATH/artifacts-v18" -type f -print0 | sort -z | xargs -0 sha256sum > exact-artifacts-sha256-v1.txt
+          find "exact-source/$PROJECT_PATH/artifacts-v18" -type f | sort > exact-artifacts-files-v1.txt
+      - name: Upload exact build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vlsdt-v18-9-exact-build-evidence-v1
+          if-no-files-found: error
+          path: |
+            exact-source-commit-v1.txt
+            exact-build-input-hashes-v1.txt
+            npm-ci-v1.log
+            clean-v1.log
+            compile-v1.log
+            size-v1.log
+            static-v1.log
+            tests-v1.log
+            exact-artifacts-sha256-v1.txt
+            exact-artifacts-files-v1.txt
