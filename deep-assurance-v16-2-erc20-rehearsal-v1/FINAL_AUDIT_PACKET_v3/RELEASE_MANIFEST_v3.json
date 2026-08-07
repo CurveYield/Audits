@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "deep-assurance-release-manifest-v3",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v1",
+  "publicationRevision": "v3",
+  "source": {
+    "repository": "CurveYield/Contracts",
+    "commit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+    "projectPath": "audit-fixtures/deep-assurance-v16-2-erc20",
+    "sourceDrift": false
+  },
+  "skill": {
+    "release": "ai-auditor-deep-assurance-v6@16.2.0",
+    "zipSha256": "1866a3e1eed74d0d03e672effb9cead25a93420a4092260526c65c7462f69b5f",
+    "manifestSha256": "60fcf39add524e8813b6f42d49cb60aa43ac5baf1f83900fe24983d4375f9099"
+  },
+  "controller": {
+    "repository": "CurveYield/audit-controller",
+    "commit": "d09a925d4735da8acde24baf39a1de2fb90ddd2f"
+  },
+  "runner": {
+    "repository": "CurveYield/contract-automation",
+    "baseCommit": "ad11d7d5a623c1411cbabb4bb0cd9acf7975bce8",
+    "bridgeMergeCommit": "ffb482b9b2ec5bff57921e3c13bafd0ee64f1aed",
+    "release": "deep-assurance-github-bridge-v1",
+    "manifestSha256": "51fc7ef486a75a0593aaf9f8b54965424785e34198479f4ee74dd88168f53292"
+  },
+  "compileEvidence": {
+    "requestId": "dar-880b1c8d2857ae959cfd44da875d63d6",
+    "runId": 31134852492,
+    "artifactId": 8977524095,
+    "artifactSha256": "62fa7e92788931a570704d8422b160a01d196b0876442f651a8f420327db736e"
+  },
+  "simulationEvidence": {
+    "requestId": "dar-f5d9589d7c0a87a40de563b3c79c463b",
+    "runId": 31135160334,
+    "artifactId": 8977655037,
+    "artifactSha256": "4fd3fe33bb8d5186a2498fc6deb5c2f7ccc650990e85b06ac3041456f9a55d2e",
+    "chainId": 1,
+    "block": 20000000,
+    "stepsCompleted": 24,
+    "stepsFailed": 0,
+    "rpcRequests": 262,
+    "rpcFailures": 0
+  },
+  "finalizationSnapshotSha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305",
+  "publication": {
+    "repository": "CurveYield/Audits",
+    "branch": "rehearsal/deep-assurance-v16-2-erc20-v1",
+    "packetPath": "deep-assurance-v16-2-erc20-rehearsal-v1/FINAL_AUDIT_PACKET_v3/",
+    "generationWorkflowResult": "PUBLICATION_WORKFLOW_RESULT_v3.json",
+    "deliveryArtifactRunId": 23323821330,
+    "deliveryArtifactId": 8984937904
+  },
+  "completionStatus": "COMPLETE",
+  "securityVerdict": "PASS",
+  "formalFindingCounts": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "informational": 2
+  },
+  "phase10StateAtManifestCreation": "PENDING"
+}
