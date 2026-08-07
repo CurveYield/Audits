@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "deep-assurance-artifact-digest-receipt-v1",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v1",
+  "sourceCommit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+  "finalizationSnapshotSha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305",
+  "artifacts": [
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+      "sizeBytes": 26068,
+      "sha256": "d811693169cf358f53adc12d57b7e74cc3ac50cac11f7898ec05b39c671851c3"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.pdf",
+      "sizeBytes": 56469,
+      "sha256": "78833d51b231172020b189a3bb5435edf6b69294fc0cd1c1be59384e63fe0ca7"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v1.zip",
+      "sizeBytes": 95782,
+      "sha256": "af46a7dcb602c47fdf42247cd177bc14a2d0c8354e23a0bab801762fa8790a42"
+    }
+  ],
+  "supportingChecks": {
+    "pdfValidationReceipt": {
+      "filename": "PDF_VALIDATION_RECEIPT_v2.json",
+      "sizeBytes": 2126,
+      "sha256": "b788ae988a9a8940dddc77512a81cf29272c55a0497c78b22f93ce08f52a9eba"
+    },
+    "releaseManifest": {
+      "filename": "RELEASE_MANIFEST_v1.json",
+      "sizeBytes": 2441,
+      "sha256": "b222c80f44afd5fcc16081a5e3b223d00b97748fd9f839f374f5a196aa9dd9d6"
+    },
+    "archiveManifest": {
+      "filename": "ARCHIVE_MANIFEST_v1.json",
+      "sizeBytes": 3262,
+      "sha256": "a66706f37976fd4d75981204b1dd1105cedafb2b1f791a39a24d691e652dff0a"
+    },
+    "archiveIntegrityVerified": true,
+    "archiveEntryCount": 17,
+    "markdownPdfFrozenBeforeReceipt": true
+  },
+  "phase10StateAtReceiptCreation": "PENDING",
+  "note": "This receipt is external to the supporting archive and was created only after the Markdown, PDF, and archive byte streams were final."
+}
