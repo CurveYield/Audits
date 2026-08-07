@@ -1,0 +1,22 @@
+[
+  {
+    "id": "limitation-no-polls-v1",
+    "effect": "production poll/task orchestration intentionally not exercised"
+  },
+  {
+    "id": "limitation-single-runtime-agent-simulation-v1",
+    "effect": "all roles executed serially by one model runtime"
+  },
+  {
+    "id": "limitation-purpose-built-fixture-v1",
+    "effect": "reviewed source is a rehearsal fixture"
+  },
+  {
+    "id": "limitation-no-production-deployment-v1",
+    "effect": "no production deployment or bytecode equivalence"
+  },
+  {
+    "id": "limitation-rpc-health-persistence-disabled-v1",
+    "effect": "cross-session RPC health persistence disabled; accepted run had 262/262 successful requests"
+  }
+]
