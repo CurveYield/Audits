@@ -1,0 +1,1 @@
+Intent: open a draft PR solely to expose the exact build/test Actions run to connector inspection. No merge.
