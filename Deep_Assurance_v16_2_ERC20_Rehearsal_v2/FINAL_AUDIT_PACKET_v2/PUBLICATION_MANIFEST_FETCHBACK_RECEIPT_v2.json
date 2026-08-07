@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "deep-assurance-publication-manifest-fetchback-receipt-v2",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v2",
+  "artifactCommit": "5cd9ff1fe2ff0dd21330ac14fd08243f2c9396c6",
+  "manifestCommit": "121a9774bc9fecef0ea8d2c00b898329bd4f96dc",
+  "manifestPath": "Deep_Assurance_v16_2_ERC20_Rehearsal_v2/FINAL_AUDIT_PACKET_v2/PUBLICATION_MANIFEST_v2.json",
+  "manifestSha256": "84eeeecaf219078b22047364764353cb5e62ce80e17807fb29b0ff7fd7e602a0",
+  "manifestGitBlobSha": "ca752f0ed838754139e32feff2422117063cacb1",
+  "artifactFetchback": {
+    "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.md": {
+      "sha256": "c1218a1cc653ef39fa5a7acdc9ad86666ee51ffd3f8dab8f1764980702708ac0",
+      "gitBlobSha": "40d3c4b6f50096ab43eebc3b297f04c00bc2482a"
+    },
+    "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.pdf": {
+      "sha256": "5a82b7d551253d9f66d381d5faa2706402c3dd5a6e9512595256bcab4b997219",
+      "gitBlobSha": "931b12b00e00aa75431d1f71bf6bccdaef25d1ab"
+    },
+    "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v2.zip": {
+      "sha256": "2204a932745a379b10b89d207dd0e9e186a7ae58cfe7ff1d562a00199ef0aa97",
+      "gitBlobSha": "64b11e8d361fde300a877fba21bc64ae81a57c8d"
+    },
+    "EXTERNAL_ARTIFACT_DIGEST_RECEIPT_v2.json": {
+      "sha256": "a4008dd9e1fbfb296e1a9f2c4f8a67b48c765e7d85efa6f510917d4525d81641",
+      "gitBlobSha": "868cab1bebae50a8106719bc896af1c8a3aff175"
+    },
+    "PDF_VALIDATION_RECEIPT_v2.json": {
+      "sha256": "08fcc008e9800b91a39d41dddfdc681b01cb1f767f5ba10e6cfdc9a29d6d7551",
+      "gitBlobSha": "5677badbeb6aa51afd479c372b6a9eff36a2073d"
+    },
+    "FINAL_REPORT_CONTENT_MANIFEST_v2.json": {
+      "sha256": "653c4ee46f4ca8b66462af38eb67324273330f233547fffff09c6989ee29aafb",
+      "gitBlobSha": "44499ac121afb3b4c4c22f6e3c6e052e3f6bbadf"
+    }
+  },
+  "status": "PASS"
+}
