@@ -1,0 +1,121 @@
+name: vlSDT V18.9 Deep Assurance v16.2 Rehearsal Tests v1
+
+on:
+  push:
+    branches:
+      - rehearsal/vlsdt-v18-9-v162-tests-7dee48511a
+    paths:
+      - .github/workflows/vlsdt-v162-rehearsal-tests-v1.yml
+
+permissions:
+  contents: read
+
+jobs:
+  exact-source-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      SOURCE_COMMIT: 1f63e0306ac35fdc4a8416064cc7aa606846e163
+      PROJECT_PATH: CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/(U) CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route(5)/CurveYield-vlSDT-v18.9-router-claim-fixed-minimal-marketplace-route
+    steps:
+      - name: Check out rehearsal branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Prove contract package bytes equal frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$SOURCE_COMMIT"
+          git diff --exit-code "$SOURCE_COMMIT" HEAD -- "$PROJECT_PATH"
+          git rev-parse "$SOURCE_COMMIT" > "$RUNNER_TEMP/source-commit.txt"
+          git ls-tree -r "$SOURCE_COMMIT" -- "$PROJECT_PATH" > "$RUNNER_TEMP/source-tree.txt"
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+
+      - name: Install project dependencies on GitHub runner
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Compile exact source
+        id: compile
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT_PATH }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run compile:v18 2>&1 | tee "$RUNNER_TEMP/compile-output.txt"
+
+      - name: Run full V18 test suite
+        id: tests
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT_PATH }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:v18 2>&1 | tee "$RUNNER_TEMP/test-output.txt"
+
+      - name: Run static checks
+        id: static
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT_PATH }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run check:static:v18 2>&1 | tee "$RUNNER_TEMP/static-output.txt"
+
+      - name: Run contract-size gate
+        id: size
+        continue-on-error: true
+        working-directory: ${{ env.PROJECT_PATH }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run size:v18 2>&1 | tee "$RUNNER_TEMP/size-output.txt"
+
+      - name: Write rehearsal result metadata
+        if: always()
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/rehearsal-result.json" <<JSON
+          {
+            "schemaVersion":"vlsdt-v18.9-rehearsal-test-result-v1",
+            "sourceCommit":"$SOURCE_COMMIT",
+            "workflowCommit":"$GITHUB_SHA",
+            "compileOutcome":"${{ steps.compile.outcome }}",
+            "testOutcome":"${{ steps.tests.outcome }}",
+            "staticOutcome":"${{ steps.static.outcome }}",
+            "sizeOutcome":"${{ steps.size.outcome }}",
+            "runId":"$GITHUB_RUN_ID"
+          }
+          JSON
+
+      - name: Upload rehearsal test evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: vlsdt-v18-9-v162-rehearsal-tests-v1-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/source-commit.txt
+            ${{ runner.temp }}/source-tree.txt
+            ${{ runner.temp }}/compile-output.txt
+            ${{ runner.temp }}/test-output.txt
+            ${{ runner.temp }}/static-output.txt
+            ${{ runner.temp }}/size-output.txt
+            ${{ runner.temp }}/rehearsal-result.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce exact-source build gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.compile.outcome }}" = success
+          test "${{ steps.tests.outcome }}" = success
+          test "${{ steps.static.outcome }}" = success
+          test "${{ steps.size.outcome }}" = success
