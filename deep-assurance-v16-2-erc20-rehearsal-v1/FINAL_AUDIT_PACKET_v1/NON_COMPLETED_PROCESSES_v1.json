@@ -1,0 +1,12 @@
+[
+  {
+    "process": "poll/task bootstrap and scheduled liveness",
+    "reason": "operator-required no-poll rehearsal",
+    "consequence": "production orchestration not proven"
+  },
+  {
+    "process": "true independent multi-agent execution",
+    "reason": "all roles executed serially by one ChatGPT runtime",
+    "consequence": "procedural rather than independent-model review"
+  }
+]
