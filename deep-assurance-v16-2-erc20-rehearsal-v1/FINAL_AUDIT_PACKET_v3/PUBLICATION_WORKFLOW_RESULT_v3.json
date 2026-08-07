@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "deep-assurance-publication-workflow-result-v3",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "sourceCommit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+  "finalizationSnapshotSha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305",
+  "completionStatus": "COMPLETE",
+  "securityVerdict": "PASS",
+  "artifacts": [
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+      "sizeBytes": 26068,
+      "sha256": "d811693169cf358f53adc12d57b7e74cc3ac50cac11f7898ec05b39c671851c3",
+      "gitBlobSha1": "e59839803e381ab3fa53c48e2d37b71bbdea4835"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v3.pdf",
+      "sizeBytes": 31263,
+      "sha256": "03adae9680c77b90f9239e88dc52e3a0b558401ac51d1e99ddaf7020fe10245a",
+      "gitBlobSha1": "fa5d6c12d4528ffa7e16a86a5f70fdb4e8049c0b"
+    },
+    {
+      "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v3.zip",
+      "sizeBytes": 33060,
+      "sha256": "e6e140c0f5276b11523a33a73fcddaa734b37203225594f84b24ce407643b21d",
+      "gitBlobSha1": "10d2b0ccfb042da1d19d611f12fc13023e31df64"
+    }
+  ],
+  "pdfPageTarget": 17,
+  "publicationRevision": "v3",
+  "note": "Generated and committed entirely inside GitHub Actions; no connector binary transcoding."
+}
