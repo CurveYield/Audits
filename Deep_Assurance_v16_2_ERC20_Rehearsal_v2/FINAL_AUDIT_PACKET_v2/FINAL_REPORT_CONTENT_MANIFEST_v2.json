@@ -1,0 +1,19 @@
+{
+  "schemaVersion":"deep-assurance-final-report-content-manifest-v2",
+  "campaignId":"deep-assurance-v16-2-erc20-rehearsal-v2",
+  "reportId":"deep-assurance-v16-2-erc20-rehearsal-report-v2",
+  "completionStatus":"COMPLETE",
+  "securityVerdict":"NO_GO",
+  "findingCounts":{"critical":0,"high":0,"medium":0,"low":0,"note":2},
+  "files":[
+    {"filename":"Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.md","bytes":17264,"sha256":"c1218a1cc653ef39fa5a7acdc9ad86666ee51ffd3f8dab8f1764980702708ac0"},
+    {"filename":"Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.pdf","bytes":36924,"sha256":"f12c3e14157f61ac341c5d5a7d1b17523cee4b5f5a9c3a929fc15632f6001dcd"},
+    {"filename":"Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v2.zip","bytes":7669,"sha256":"ef412187f0011acde46d411a6a52ba4c494df756a9db9a2ca4c4439c0af53428"},
+    {"filename":"EXTERNAL_ARTIFACT_DIGEST_RECEIPT_v2.json","bytes":882,"sha256":"5ffc24612f04c6e2f5536003f1dfa11fbef784b60838787120ae58914caae669"},
+    {"filename":"PDF_VALIDATION_RECEIPT_v2.json","bytes":548,"sha256":"2c568ca26611e9defecb6092e15433088a779e33e048673d84b5d6b194def89d"}
+  ],
+  "sourceCommit":"248e5d5de42f8a111050fb8d2b7d587653833331",
+  "controllerPin":"d09a925d4735da8acde24baf39a1de2fb90ddd2f",
+  "skillRelease":"ai-auditor-deep-assurance-v6@16.2.0",
+  "phase10State":"PENDING_UNTIL_PUBLICATION_RECORDED"
+}
