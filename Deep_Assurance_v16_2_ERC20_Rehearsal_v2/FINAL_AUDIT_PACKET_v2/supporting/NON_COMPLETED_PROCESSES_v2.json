@@ -1,0 +1,11 @@
+{
+  "items": [
+    {
+      "id": "PROC-SIM-01",
+      "process": "github-native-simulate-v1 substantive execution",
+      "status": "NOT_COMPLETED_WITH_ADMISSIBLE_EVIDENCE",
+      "attempts": 2,
+      "impact": "Gate 07 FAIL / NO_GO"
+    }
+  ]
+}

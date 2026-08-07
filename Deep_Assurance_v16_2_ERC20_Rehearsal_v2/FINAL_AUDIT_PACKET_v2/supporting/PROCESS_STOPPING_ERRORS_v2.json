@@ -1,0 +1,10 @@
+{
+  "errors": [
+    {
+      "id": "STOP-01",
+      "gate": "fork-simulation-lifecycle-complete",
+      "status": "TERMINAL_FAILED_GATE",
+      "disposition": "COMPLETE + NO_GO"
+    }
+  ]
+}

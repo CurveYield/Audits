@@ -1,0 +1,12 @@
+{
+  "status": "ACCEPTED",
+  "requestId": "dar-360e53dba12380d95c70b609fddd1488",
+  "runId": 31139567021,
+  "artifactId": 8979310203,
+  "artifactZipSha256": "9e2b10d2600fc4aec078e923a23477c42572c2eb3ecc761e2e5853a2f9c374c2",
+  "normalizedStatus": "PASSED",
+  "compilerVersion": "0.8.28",
+  "compilerDiagnostics": [],
+  "sourceCommit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+  "sourceFileSha256": "45f03e840b749f0d34255402aacc3045a51dede8c6a08cafc7a83242c7c9ee9c"
+}

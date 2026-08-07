@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "deep-assurance-supporting-archive-content-manifest-v2",
+  "campaignId": "deep-assurance-v16-2-erc20-rehearsal-v2",
+  "files": [
+    {
+      "path": "supporting/AUDIT_EVIDENCE_INDEX_v2.json",
+      "bytes": 952,
+      "sha256": "2e96d7a1c0ad20a36117df7d9ec2cb90967cf2df1a41da7a71c21bd5adbcc2ea"
+    },
+    {
+      "path": "supporting/BasicERC20Rehearsal_v1.sol",
+      "bytes": 2077,
+      "sha256": "ecdb1f506f9d16509a8b65d2542e23d2e143ee56f611db32bf8644f0e468abdd"
+    },
+    {
+      "path": "supporting/GENERAL_ERRORS_v2.json",
+      "bytes": 455,
+      "sha256": "5433ed73f8ba9c35698282211604f83673fe8ccaa9dd2153bdda5f328dc8c0e8"
+    },
+    {
+      "path": "supporting/NON_COMPLETED_PROCESSES_v2.json",
+      "bytes": 246,
+      "sha256": "7c41a5e55002f367c49e3b3da01da9e64926f86b5b735cdfd7851620d71c63d6"
+    },
+    {
+      "path": "supporting/PINNED_COMPILE_EVIDENCE_RECEIPT_v2.json",
+      "bytes": 469,
+      "sha256": "ba6d13c8c2703ce0ec0796b5f49eaac957192922fdecbbd9a599002679cccf02"
+    },
+    {
+      "path": "supporting/PINNED_SIMULATION_DISPOSITION_v2.json",
+      "bytes": 545,
+      "sha256": "02d591c3d2027c394616aa34a6cb665b74952179ed408568182f3091e4ccef0f"
+    },
+    {
+      "path": "supporting/PROCESS_STOPPING_ERRORS_v2.json",
+      "bytes": 189,
+      "sha256": "e20776313e0db8db6e94869cb20da7cc14086d44900c85885c19123ed9b79449"
+    },
+    {
+      "path": "supporting/REMEDIATION_LEDGER_v2.md",
+      "bytes": 175,
+      "sha256": "bcaa1aec42dd101a44af7162a61756f487738f65569ef60712825357eae35bbc"
+    }
+  ]
+}

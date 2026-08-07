@@ -1,0 +1,16 @@
+{
+  "errors": [
+    {
+      "id": "ERR-01",
+      "summary": "Earlier rehearsal branch namespace collision.",
+      "resolution": "Fenced; clean v2-g2 generation adopted.",
+      "affectsFinalVerdict": false
+    },
+    {
+      "id": "ERR-02",
+      "summary": "Pinned simulation evidence unavailable after two bounded exact-source dispatches.",
+      "resolution": "Gate 07 FAIL; no auxiliary substitution.",
+      "affectsFinalVerdict": true
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "status": "REQUIRED_EVIDENCE_UNAVAILABLE",
+  "requiredProfile": "github-native-simulate-v1",
+  "attempts": [
+    {
+      "requestId": "dar-a47cf351ba4c133fd5a2b35d2efe98b6",
+      "dispatchCommit": "83c1341ffd1658c422889efbfde26f5860b5808f"
+    },
+    {
+      "requestId": "dar-71c87018670953e088088b307dbdc97f",
+      "dispatchCommit": "0443054fd15a5fa23eb9e7d2b2576f09f45b2ee3"
+    }
+  ],
+  "chain": "ethereum",
+  "pinnedBlock": 20000000,
+  "auxiliarySubstitutionAllowed": false,
+  "gate07": "FAIL",
+  "finalVerdictConsequence": "NO_GO"
+}
