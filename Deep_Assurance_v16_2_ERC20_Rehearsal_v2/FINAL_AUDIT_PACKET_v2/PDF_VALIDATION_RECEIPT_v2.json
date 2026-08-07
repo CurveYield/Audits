@@ -1,0 +1,14 @@
+{
+  "schemaVersion":"deep-assurance-pdf-validation-receipt-v2",
+  "filename":"Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v2.pdf",
+  "sha256":"f12c3e14157f61ac341c5d5a7d1b17523cee4b5f5a9c3a929fc15632f6001dcd",
+  "pages":8,
+  "encrypted":false,
+  "openablePyMuPDF":true,
+  "likelyScanned":false,
+  "pageSize":"612x792 pt Letter",
+  "textExtraction":"PASS",
+  "extractedTextSha256":"545a382d6d094bc6dca4496971286adeaa9fead4b2d6426a023a5b40694cbbfb",
+  "visualRenderReview":"PASS_CONTACT_SHEET_AND_PAGE_RENDERS",
+  "status":"PASS"
+}
