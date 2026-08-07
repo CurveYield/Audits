@@ -1,0 +1,1 @@
+All remaining GitHub mutations use the connected GitHub API. No local GitHub CLI is available.
