@@ -1,0 +1,48 @@
+{
+  "schemaVersion": "pdf-validation-receipt-v3",
+  "reportId": "deep-assurance-v16-2-erc20-rehearsal-report-v1",
+  "publicationRevision": "v3",
+  "sourceCommit": "248e5d5de42f8a111050fb8d2b7d587653833331",
+  "finalizationSnapshotSha256": "c5a86a09fcdf9ae74ebcd0ccf618b7f45ee6b756c5197b47fcdb3c6ccdbe7305",
+  "markdown": {
+    "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v1.md",
+    "sizeBytes": 26068,
+    "sha256": "d811693169cf358f53adc12d57b7e74cc3ac50cac11f7898ec05b39c671851c3",
+    "gitBlobSha1": "e598398070edca5b13fba0a55a66efc0b89d074e"
+  },
+  "pdf": {
+    "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Final_Report_v3.pdf",
+    "sizeBytes": 31325,
+    "sha256": "03adae96017a7f39fe76c7999b6f83e2c109090c3054145450b8af081535523a",
+    "gitBlobSha1": "fa5d6c120aa0622a80c8069fd35ef70141eb22d9",
+    "pageCount": 17
+  },
+  "supportingArchive": {
+    "filename": "Deep_Assurance_v16_2_ERC20_Rehearsal_Supporting_Files_v3.zip",
+    "sizeBytes": 55383,
+    "sha256": "e6e140c0353b8fd9aa0983429503cb28898c4174970d8c84e93ca1f2a77f7af3",
+    "gitBlobSha1": "10d2b0cc44d311125cf8c1d2fdfec1b1cd7e1972",
+    "entryCount": 8
+  },
+  "deliveryArtifact": {
+    "filename": "Deep_Assurance_v16_2_ERC20_Final_Packet_v3.zip",
+    "sizeBytes": 125583,
+    "sha256": "86fbe9df738a503b4099f69cf2207931643354545f4926219088517e39ebcb95",
+    "githubArtifactId": 8984937904,
+    "githubArtifactRunId": 23323821330
+  },
+  "validation": {
+    "pdfOpenable": true,
+    "pdfEncrypted": false,
+    "all17PagesNonblank": true,
+    "all17PagesRendered": true,
+    "findingsSummaryPage8Resolved": true,
+    "requiredFrozenValuesPresent": true,
+    "supportZipIntegrity": true,
+    "supportZipEmbedsExactMarkdownAndPdf": true,
+    "pdfContentBinding": "PASS",
+    "finalPdfValidated": true
+  },
+  "completionStatus": "COMPLETE",
+  "securityVerdict": "PASS"
+}
