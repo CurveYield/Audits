@@ -1,0 +1,11 @@
+{
+  "schemaVersion":"deep-assurance-publication-build-request-v2",
+  "campaignId":"deep-assurance-v16-2-erc20-rehearsal-v2",
+  "campaignGenerationId":"dag-20260806-v16-2-erc20-rehearsal-v2-g2",
+  "reportId":"deep-assurance-v16-2-erc20-rehearsal-report-v2",
+  "exactSourceCommit":"248e5d5de42f8a111050fb8d2b7d587653833331",
+  "controllerPin":"d09a925d4735da8acde24baf39a1de2fb90ddd2f",
+  "skillRelease":"ai-auditor-deep-assurance-v6@16.2.0",
+  "publicationOrder":"artifacts -> remote fetchback -> manifest -> manifest fetchback receipt -> publication.record -> phase10 -> visible user delivery",
+  "requestSequence":1
+}
