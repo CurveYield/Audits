@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "skill-package-pin-v1",
+  "campaignId": "boosthub-v2-2026-08-07-v1",
+  "campaignGenerationId": "617292385dd1ec9cc4bbbd3ddfdaefc4",
+  "packageVersion": "16.12.0",
+  "requiredEmbeddedReleaseIdentity": "ai-auditor-deep-assurance-v6@16.12.0",
+  "identityVerificationMode": "EMBEDDED_RELEASE_IDENTITY_VERIFIED",
+  "skillSha256": "66054692f7b484b051a8cfb8614702f9ad6760162afeb5073420b46343d8e477",
+  "manifestSha256": "HASH_OBSERVABILITY_UNAVAILABLE",
+  "controllerCommit": "f0fe601c32f469176dddfb3428959a3b21b367f9",
+  "automationBaseCommit": "ad11d7d5a623c1411cbabb4bb0cd9acf7975bce8",
+  "bridgeCommit": "ffb482b9b2ec5bff57921e3c13bafd0ee64f1aed",
+  "runnerRelease": "deep-assurance-github-bridge-v1",
+  "runnerManifestSha256": "51fc7ef486a75a0593aaf9f8b54965424785e34198479f4ee74dd88168f53292",
+  "status": "PINNED"
+}

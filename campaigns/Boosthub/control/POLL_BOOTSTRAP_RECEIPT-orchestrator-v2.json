@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "deep-assurance-poll-bootstrap-receipt-v2",
+  "campaignId": "boosthub-v2-2026-08-07-v1",
+  "campaignGenerationId": "617292385dd1ec9cc4bbbd3ddfdaefc4",
+  "identity": "live-orchestrator",
+  "taskId": "6a76c6d040508191a2dafffa7b92ef6c",
+  "title": "DA6 Boosthub Orchestrator",
+  "timingMode": "exact_schedule",
+  "schedule": "BEGIN:VEVENT\nDTSTART:20260807T233000\nRRULE:FREQ=HOURLY\nEND:VEVENT",
+  "immediatelyDisabled": true,
+  "freshLookupObservedEnabled": false,
+  "sourceRepository": "CurveYield/Audits",
+  "sourceCommit": "b9a87d95c3d6c1f69bfc1083f3815620f0cba711",
+  "status": "IMMEDIATE_DISABLE_VERIFIED"
+}

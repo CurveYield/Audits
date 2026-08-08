@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "campaign-generation-record-v1",
+  "campaignId": "boosthub-v2-2026-08-07-v1",
+  "campaignGenerationId": "617292385dd1ec9cc4bbbd3ddfdaefc4",
+  "createdAt": "2026-08-08T06:11:08Z",
+  "projectSlug": "Boosthub",
+  "sourceZipSha256": "97c07b3ea1c7a59061960a0ca5bd2faa6ab0792c4e80b369dc463a4f9d6ed48b",
+  "orchestratorSessionId": "NOT_EXPOSED_BY_AUTOMATION_API",
+  "status": "ACTIVE",
+  "supersedesGenerationId": null
+}
