@@ -1,0 +1,53 @@
+# V20 static check output
+
+Generated UTC: 2026-07-26 05:42:33
+
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:static:v20
+> npm run check:source-layout:v20 && npm run check:solidity-structure:v20 && npm run check:js:v20 && npm run check:mint-schedule:v20 && npm run check:mint-controls:v20 && npm run check:beefy-revenue-vault:v20 && npm run check:governance-staking-slim:v20 && npm run check:cygov-yield-staking:v20 && npm run check:revenue-benchmark-fees:v20
+
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:source-layout:v20
+> node scripts/check-source-layout-v20.js
+
+V20 active source layout and architecture checks passed.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:solidity-structure:v20
+> node scripts/check-solidity-structure-v20.js
+
+Solidity structural scan passed for 36 active files (not compilation).
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:js:v20
+> node scripts/check-javascript-v20.js
+
+JavaScript syntax passed for 26 active files.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:mint-schedule:v20
+> node scripts/check-mint-schedule-math-v20.js
+
+V20 mint schedule math passed: cap reached in month 121.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:mint-controls:v20
+> node scripts/check-governance-mint-controls-v20.js
+
+V20 governance unlock, adjustable quota, reservation, and external mint-controller checks passed.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:beefy-revenue-vault:v20
+> node scripts/check-beefy-revenue-vault-v20.js
+
+V20 Beefy revenue-vault and immediate converter-route static checks passed.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:governance-staking-slim:v20
+> node scripts/check-governance-staking-slim-v20.js
+
+Governance Staking slimming checks passed: 62041 -> 50687 source bytes (18.3% reduction).
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:cygov-yield-staking:v20
+> node scripts/check-cygov-yield-staking-v20.js
+
+V20 cyGOV Yield Staking, locked max-rate backing, allocations, Treasury routing, and sole admin-fee exception checks passed.
+
+> curveyield-vlsdt-liquid-locker-v20-uncompiled@20.0.0 check:revenue-benchmark-fees:v20
+> node scripts/check-revenue-benchmark-fees-v20.js
+
+V20 Revenue Staking benchmark split passed: 33% Treasury + 7% admin-role fee on excess; admin is the sole non-Treasury fee.
