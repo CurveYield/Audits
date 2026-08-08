@@ -1,0 +1,103 @@
+{
+  "schema": "curveyield-external-dependencies-v1",
+  "basis": "attached current frontend-v7 inventory",
+  "dependencies": [
+    {
+      "chain": "Ethereum",
+      "label": "sdCRV StakeDAO Gauge",
+      "address": "0x7f50786A0b15723D741727882ee99a0BF34e3466",
+      "category": "external_gauge"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdCRV / LP Token",
+      "address": "0xD1b5651E55D4CeeD36251c61c50C889B36F6abB5",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "crvUSD",
+      "address": "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "CRV",
+      "address": "0xD533a949740bb3306d119CC777fa900bA034cd52",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdFXN StakeDAO Gauge",
+      "address": "0xbcfE5c47129253C6B8a9A00565B3358b488D42E0",
+      "category": "external_gauge"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdFXN / LP Token",
+      "address": "0xe19d1c837B8A1C83A56cD9165b2c0256D39653aD",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "wstETH",
+      "address": "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdYB StakeDAO Gauge",
+      "address": "0x28604Ff7B4aEAE28d4d9e54d14038c910844343a",
+      "category": "external_gauge"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdYB / LP Token",
+      "address": "0x0c057598dcE1891688829581f890DD2a3685a43f",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "sdYB Curve Pool / Yield Source",
+      "address": "0x98b540fa89690969D111D045afCa575C91519B1A",
+      "category": "external_pool"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "StakeDAO Token / SDT",
+      "address": "0x73968b9a57c6E53d41345FD57a6E6ae27d6CDB2F",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "FXN price-fallback token",
+      "address": "0x365AccFCa291e7D3914637ABf1F7635dB165Bb09",
+      "category": "external_token"
+    },
+    {
+      "chain": "Ethereum",
+      "label": "YB price-fallback token",
+      "address": "0x01791F726B4103694969820be083196cC7c045fF",
+      "category": "external_token"
+    },
+    {
+      "chain": "Fraxtal",
+      "label": "sdFXS StakeDAO Gauge",
+      "address": "0x12992595328E52267c95e45B1a97014D6Ddf8683",
+      "category": "external_gauge"
+    },
+    {
+      "chain": "Fraxtal",
+      "label": "sdFXS / LP Token",
+      "address": "0x1AEe2382e05Dc68BDfC472F1E46d570feCca5814",
+      "category": "external_token"
+    },
+    {
+      "chain": "Fraxtal",
+      "label": "WFRAX",
+      "address": "0xFc00000000000000000000000000000000000002",
+      "category": "external_token"
+    }
+  ],
+  "auditTreatment": "Treat as external protocol/token dependencies. Do not mistake their explorer source for first-party CurveYield source."
+}

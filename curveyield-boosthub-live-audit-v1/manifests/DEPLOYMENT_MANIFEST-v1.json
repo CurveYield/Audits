@@ -1,0 +1,399 @@
+{
+  "schema": "curveyield-live-audit-deployment-manifest-v1",
+  "package": "curveyield-boosthub-live-audit-v1",
+  "builtAt": "2026-08-07T11:20:00Z",
+  "canonicalInventory": "inventory/curveyield-boosthub-current-contracts-v2-v1.md",
+  "scopeRule": "Current active BoostHub suite from attached frontend-v7 inventory, plus live first-party helper contracts discovered from the current sdYB/sdCRV deployed constructors. External gauges/tokens/pools are dependencies, not first-party audit source targets.",
+  "legacyExclusion": "Hidden legacy sdYB-old deployment intentionally excluded because the canonical inventory explicitly excludes it.",
+  "deploymentCount": 24,
+  "deployments": [
+    {
+      "id": "ethereum-boosthub",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "Ethereum BoostHub",
+      "address": "0xFbEF8941Da53EA724385B44E91ae9672061D0263",
+      "role": "hub",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/BoostHub.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "fraxtal-boosthub",
+      "chain": "Fraxtal",
+      "chainId": 252,
+      "label": "Fraxtal BoostHub",
+      "address": "0xFbEF8941Da53EA724385B44E91ae9672061D0263",
+      "role": "hub",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/fraxtal/BoostHub.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdcrv-staking",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV Staking",
+      "address": "0xA6730b33203f005cab6c80a2fF1d8B73E1947F2C",
+      "role": "staking_receipt",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/BoostHubStaking.vy",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "pid": 0,
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdcrv-vault",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV Vault",
+      "address": "0xdB6AA572243b9617C4b39FB20468843b2CB97bA5",
+      "role": "vault",
+      "sourceFamily": "sdcrv-current-v3-v1",
+      "sourcePath": "source-versions/sdcrv-current-v3-v1/CurveYieldVaultV7-cysdCRV-flattened-v3.sol",
+      "sourceBinding": "live_explorer_verified_release_source",
+      "compiler": "Solidity 0.8.28",
+      "optimizerRuns": 1000,
+      "evidence": [
+        "attached-current-inventory",
+        "Ethereum Blockscout verified source",
+        "cysdCRV manual deployment v3"
+      ]
+    },
+    {
+      "id": "sdcrv-strategy",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV Strategy",
+      "address": "0x93DFEfeFd5D3736381086eFa5A8810F278138ADf",
+      "role": "strategy",
+      "sourceFamily": "sdcrv-current-v3-v1",
+      "sourcePath": "source-versions/sdcrv-current-v3-v1/CurveYieldStakingStrategy-cysdCRV-flattened-v3.sol",
+      "sourceBinding": "live_explorer_verified_release_source",
+      "compiler": "Solidity 0.8.28",
+      "optimizerRuns": 1000,
+      "evidence": [
+        "attached-current-inventory",
+        "Ethereum Blockscout verified source",
+        "cysdCRV manual deployment v3"
+      ]
+    },
+    {
+      "id": "sdcrv-converter-crv",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV Converter 1 / CRV route",
+      "address": "0x3C618Deb7659695C378170A032A1B8e61e17644E",
+      "role": "reward_converter",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/CurveRouterRewardConverter.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdcrv-converter-inventory-2",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV Converter 2 (inventory-listed)",
+      "address": "0xf4b32155BeA17b075AEf88540e14F9835e16351B",
+      "role": "reward_converter_inventory_reference",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/CurveRouterRewardConverter.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "routeStatus": "listed_by_frontend_inventory_but_not_selected_by_current_strategy_constructor",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json",
+        "cysdCRV manual deployment v3 warning"
+      ]
+    },
+    {
+      "id": "sdcrv-converter-crvusd-current-route",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdCRV current crvUSD route converter",
+      "address": "0x78ff102EbEa3091A712257027380dE59376F5e82",
+      "role": "reward_converter_live_strategy_route",
+      "sourceFamily": "sdcrv-current-v3-v1",
+      "sourcePath": "source-versions/sdcrv-current-v3-v1/CysdCrvCrvUsdRewardConverterV1-flattened-v3.sol",
+      "sourceBinding": "live_explorer_verified_release_source",
+      "compiler": "Solidity 0.8.28",
+      "optimizerRuns": 1000,
+      "evidence": [
+        "current sdCRV strategy constructor",
+        "Ethereum Blockscout verified source",
+        "cysdCRV manual deployment v3"
+      ]
+    },
+    {
+      "id": "sdfxn-staking",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdFXN Staking",
+      "address": "0x7d53B437f950d6F515C8871aC985F1e875d6B52E",
+      "role": "staking_receipt",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/BoostHubStaking.vy",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "pid": 1,
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxn-vault",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdFXN Vault",
+      "address": "0x0f57460a1bef095c4D788B3b6118533823d8d3dD",
+      "role": "vault",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/CurveYieldVaultV7.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxn-strategy",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdFXN Strategy",
+      "address": "0xc202f5137DE30b8170874e1DE55d1DbB2FA4CD45",
+      "role": "strategy",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/CurveYieldStakingStrategy.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxn-converter",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdFXN Converter",
+      "address": "0xd66D8F419d9e809eC3A6443A5Da72AEae56649eB",
+      "role": "reward_converter",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/WstEthCurveRouterRewardConverter.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdyb-staking",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Staking",
+      "address": "0xD63819Fef90981fAc8CD6240EA1f2559CD835CBa",
+      "role": "staking_receipt",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/ethereum/BoostHubStaking.vy",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "pid": 2,
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdyb-vault",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Hybrid Vault",
+      "address": "0x8582dC9a1f0e6DeFcB2Cd3CFd6BF36B053A4cCe3",
+      "role": "hybrid_vault",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBHybridVaultV17.sol",
+      "sourceBinding": "live_explorer_verified_multifile_bundle",
+      "compiler": "Solidity 0.8.28",
+      "optimizerRuns": 200,
+      "viaIR": true,
+      "evidence": [
+        "attached-current-inventory",
+        "Ethereum Blockscout verified source bundle",
+        "sdYB v22 source release"
+      ]
+    },
+    {
+      "id": "sdyb-strategy",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Multi-Venue Strategy",
+      "address": "0x30048681bf6924221f75Ecd98C42a4A3C5a7B0e3",
+      "role": "hybrid_strategy",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBMultiVenueStrategyV17.sol",
+      "sourceBinding": "live_explorer_verified_multifile_bundle",
+      "compiler": "Solidity 0.8.28",
+      "optimizerRuns": 200,
+      "viaIR": true,
+      "evidence": [
+        "attached-current-inventory",
+        "Ethereum Blockscout verified source bundle",
+        "sdYB v22 source release"
+      ]
+    },
+    {
+      "id": "sdyb-allocator",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Allocator helper",
+      "address": "0xbe65467811024A035F6091Ca893502c3a33dC214",
+      "role": "allocator",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBAllocatorV17.sol",
+      "sourceBinding": "source_bundle_candidate_unproven_address_binding",
+      "evidence": [
+        "current sdYB strategy constructor",
+        "sdYB verified source bundle"
+      ],
+      "limitation": "Address has deployed code but was unverified on Ethereum Blockscout at package-build time."
+    },
+    {
+      "id": "sdyb-valuation",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Valuation helper",
+      "address": "0x4904F0c0Ad2B864E5cEbA33ae65eE07F1dB6Aaf1",
+      "role": "valuation",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBValuationV17.sol",
+      "sourceBinding": "source_bundle_candidate_unproven_address_binding",
+      "evidence": [
+        "current sdYB strategy constructor",
+        "sdYB verified source bundle"
+      ],
+      "limitation": "Address has deployed code but was unverified on Ethereum Blockscout at package-build time."
+    },
+    {
+      "id": "sdyb-conversion-guard",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Conversion Guard helper",
+      "address": "0x07466132efd3Bd09e498B42374c5e6a2C30642a2",
+      "role": "conversion_guard",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBConversionGuardV17.sol",
+      "sourceBinding": "source_bundle_candidate_unproven_address_binding",
+      "evidence": [
+        "current sdYB strategy constructor",
+        "sdYB verified source bundle"
+      ],
+      "limitation": "Address has deployed code but was unverified on Ethereum Blockscout at package-build time."
+    },
+    {
+      "id": "sdyb-execution-module",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB Execution Module helper",
+      "address": "0x28Fab984eD43780Ad6F061b6e6cB3642AAaaBE6D",
+      "role": "execution_module",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldSdYBExecutionModuleV17.sol",
+      "sourceBinding": "source_bundle_candidate_unproven_address_binding",
+      "evidence": [
+        "current sdYB strategy constructor",
+        "sdYB verified source bundle"
+      ],
+      "limitation": "Address has deployed code but was unverified on Ethereum Blockscout at package-build time."
+    },
+    {
+      "id": "sdyb-crv-to-yb-converter",
+      "chain": "Ethereum",
+      "chainId": 1,
+      "label": "sdYB CRV-to-YB Converter helper",
+      "address": "0x2942860850613086b1309fe49c42FD4e58d78096",
+      "role": "converter",
+      "sourceFamily": "sdyb-live-v22-source-v1",
+      "sourcePath": "source-versions/sdyb-live-v22-source-v1/CurveYieldCrvToYBConverterV17.sol",
+      "sourceBinding": "source_bundle_candidate_unproven_address_binding",
+      "evidence": [
+        "current sdYB strategy constructor",
+        "sdYB verified source bundle"
+      ],
+      "limitation": "Address has deployed code but was unverified on Ethereum Blockscout at package-build time."
+    },
+    {
+      "id": "sdfxs-staking",
+      "chain": "Fraxtal",
+      "chainId": 252,
+      "label": "sdFXS Staking",
+      "address": "0xa4BfFa7D08dC3c5a46bFC668C6dDa290BB3Cf183",
+      "role": "staking_receipt",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/fraxtal/BoostHubStaking.vy",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "pid": 0,
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxs-vault",
+      "chain": "Fraxtal",
+      "chainId": 252,
+      "label": "sdFXS Vault",
+      "address": "0x0A4b9DC3fC75DDBEb44B581a582B5D27d09ede47",
+      "role": "vault",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/fraxtal/CurveYieldVaultV7.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxs-strategy",
+      "chain": "Fraxtal",
+      "chainId": 252,
+      "label": "sdFXS Strategy",
+      "address": "0xF64bC212C4dD190d10764B8B447C62368908c2AE",
+      "role": "strategy",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/fraxtal/CurveYieldStakingStrategy.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    },
+    {
+      "id": "sdfxs-converter",
+      "chain": "Fraxtal",
+      "chainId": 252,
+      "label": "sdFXS Converter",
+      "address": "0x2616Efd6F8D629dE2223924AE07A691e03240207",
+      "role": "reward_converter",
+      "sourceFamily": "standard-v1",
+      "sourcePath": "source-versions/standard-v1/fraxtal/SdFxsRewardConverter.sol",
+      "sourceBinding": "exact_verified_creation_bytecode",
+      "evidence": [
+        "attached-current-inventory",
+        "CurveYield/Contracts SOURCE_VERIFICATION.json"
+      ]
+    }
+  ]
+}

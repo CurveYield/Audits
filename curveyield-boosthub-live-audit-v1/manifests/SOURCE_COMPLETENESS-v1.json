@@ -1,0 +1,24 @@
+{
+  "schema": "curveyield-source-completeness-v1",
+  "deploymentTargets": 24,
+  "sourceBindingCounts": {
+    "exact_verified_creation_bytecode": 14,
+    "live_explorer_verified_release_source": 3,
+    "live_explorer_verified_multifile_bundle": 2,
+    "source_bundle_candidate_unproven_address_binding": 5
+  },
+  "openExactBindingTargets": 5,
+  "sourceFilesIncluded": 35,
+  "sourceFamilies": 3,
+  "openItems": [
+    "Prove exact deployed bytecode/source binding for the five unverified sdYB helper addresses.",
+    "Establish a live Yield Lens address only if one is actually deployed and considered part of current production scope.",
+    "Resolve why frontend inventory retains sdCRV converter 0xf4b... while the current strategy route selects 0x78ff...; both are preserved for audit evidence."
+  ],
+  "packagingResult": "READY_FOR_PHASE0_SOURCE_FREEZE_WITH_DECLARED_BINDING_GAPS",
+  "noCompilationPerformed": true,
+  "cryptographicallyExactBindingTargets": 14,
+  "verifiedExplorerReleaseCorrelatedTargets": 5,
+  "unverifiedHelperBindingTargets": 5,
+  "verificationInterpretation": "14 standard targets have historical creation-bytecode/source verification. Five newer current targets expose verified explorer source correlated to the preserved release files, but this packaging pass did not independently derive an explorer source digest. Five sdYB helper addresses remain unverified and require exact binding during audit."
+}

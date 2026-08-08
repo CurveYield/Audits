@@ -1,0 +1,22 @@
+{
+  "schema": "curveyield-audit-package-manifest-v1",
+  "package": "curveyield-boosthub-live-audit-v1",
+  "purpose": "Deep Assurance v6 source-freeze intake for live deployed BoostHub suite",
+  "canonicalInventory": "inventory/curveyield-boosthub-current-contracts-v2-v1.md",
+  "deploymentTargets": 24,
+  "externalDependencies": 16,
+  "sourceFamilies": [
+    "standard-v1",
+    "sdcrv-current-v3-v1",
+    "sdyb-live-v22-source-v1"
+  ],
+  "sourceFiles": 35,
+  "controllerRepo": "CurveYield/audit-controller",
+  "controllerCommitObserved": "f0fe601c32f469176dddfb3428959a3b21b367f9",
+  "v6SkillPackage": "Audit_V6.1_Deep_Assurance_Autonomous_Workflow_v16_5_v1.zip",
+  "v6SkillPackageSha256": "dc65e538d98d765fb88b354d893d07037417bb228f4b150416ff554a0527df11",
+  "phase0TargetRepo": "CurveYield/Audits",
+  "status": "READY_FOR_PHASE0_SOURCE_FREEZE_WITH_DECLARED_LIMITATIONS",
+  "compilePerformed": false,
+  "dependenciesDownloaded": false
+}

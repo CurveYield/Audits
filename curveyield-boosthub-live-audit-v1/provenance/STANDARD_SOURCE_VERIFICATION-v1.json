@@ -1,0 +1,39 @@
+{
+  "schema": "curveyield-standard-source-verification-provenance-v1",
+  "origin": "CurveYield/Contracts / BoostHub Contracts/deployment/SOURCE_VERIFICATION.json",
+  "originCommit": "5464d13029cfbdc7d46ca28f93ee577454b89d9e",
+  "verifiedAt": "2026-07-17T21:01:16-07:00",
+  "method": "Compiled creation bytecode was compared with live creation bytecode; a match required live creation bytecode to begin with the complete compiled init code, with constructor arguments following.",
+  "recordedSummary": {
+    "checked": 19,
+    "matched": 19,
+    "failed": 0
+  },
+  "compilerSettings": {
+    "solidity": "0.8.28+commit.7893614a",
+    "optimizer": true,
+    "runs": 200,
+    "viaIR": true,
+    "evmVersion": "paris",
+    "vyper": "0.2.8+commit.069936f"
+  },
+  "recordedSourceSha256": {
+    "BoostHub.sol": "365ac3c506e0b8f634381fe79a900558e43c5922f4e1294923bd9b4c3a15dde0",
+    "BoostHubStaking.vy": "3b99a3916fefb65e7dad62c6a03beb4468540265f7b40cb9149efcd0067122ae",
+    "CurveRouterRewardConverter.sol": "67089b9ff887fcef04bd0081f493440b030a6c2485bed7d005bbd4cc86ae129f",
+    "CurveYieldStakingStrategy.sol": "ba1579593ec48b68e1c9ab14284e4d764d3f8ada8bf8a2fc64e5967a76680910",
+    "CurveYieldVaultV7.sol": "fa6897b28571d65f53d73fe7b77499fcfeb9260f5421a2036143b220046e2a03",
+    "SdFxsRewardConverter.sol": "9a4ffe69e46d3cebb9ae9a15f819900ad1cbd54195f3a9aa3ff4dd4b4b491edb",
+    "SdYbRewardConverter.sol": "c70d3e685e0cd5971076ba1e78c189acc0be540d3a4206c718c1bb698523aa6b",
+    "WstEthCurveRouterRewardConverter.sol": "0aa035093ab8b3f95a61fc0faac35e99ac8392a5583cb1f24344e8c11115ab8b",
+    "interfaces/IBoostHub.sol": "3801a2f9ee27732a68da0a371ba193bfe431ee474b81981d00a664b94d1fb99d",
+    "interfaces/ICurveYieldStrategy.sol": "b338505a9a77783d271f2a63aab96af20f1ee475ddd2a52fb012401fa6250d5b",
+    "interfaces/ISnapshotDelegateRegistry.sol": "21485ee1a40c5a4bd097db1df0a0fa18348a2a66d9768100673992077a384e4d",
+    "interfaces/IStakeDaoGauge.sol": "e9e571d9c12bef5a69159378701465c15cb824dc795559e979bc6f3f05ecd1fd",
+    "interfaces/IvlBoost.sol": "a9c5a8951a0a8686588f153563b1f1b0e90efb52f03fcee55d94acd2d31131af",
+    "libraries/BoostHubErrors.sol": "cf07805b1db99e0e00c73732805811525bf10cfc2bceedf9ec72d19955219d28",
+    "network-variants/fraxtal/CurveYieldStakingStrategy.sol": "68661b2320ea12b5587d7f8c5eb5537bc6b5ca21af5d1d41f1ab221cc4c1cd4e"
+  },
+  "packageRecheck": "The package builder recomputed SHA-256 over the preserved standard source files. Primary and interface/library hashes match the recorded sourceSha256 values. No compilation was run during package creation.",
+  "importantScopeQualification": "The historical SOURCE_VERIFICATION record contains older sdCRV and standard sdYB vault/strategy addresses. Those historical addresses are NOT used as current scope. The attached frontend-v7 inventory controls current address scope; newer sdCRV and hybrid sdYB families are mapped separately."
+}
