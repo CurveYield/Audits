@@ -1,0 +1,16 @@
+{
+  "schema": "curveyield-boosthub-source-completeness-v2",
+  "package": "CurveYield-Boosthub-Source-v2",
+  "activeLockerCount": 3,
+  "activeLockers": [
+    "sdcrv",
+    "sdfxn",
+    "sdfxs"
+  ],
+  "chains": [
+    1,
+    252
+  ],
+  "checksumManifest": "MANIFEST-v2.sha256",
+  "status": "COMPLETE_FOR_DECLARED_SCOPE"
+}

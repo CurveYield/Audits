@@ -1,0 +1,14 @@
+{
+  "schema": "curveyield-boosthub-source-package-manifest-v2",
+  "package": "CurveYield-Boosthub-Source-v2",
+  "sourceReleaseBasis": "frontend-v11",
+  "scopeFile": "AUDIT_SCOPE-v2.md",
+  "sourceCompletenessFile": "SOURCE_COMPLETENESS-v2.json",
+  "checksumManifest": "MANIFEST-v2.sha256",
+  "activeLockers": [
+    "sdcrv",
+    "sdfxn",
+    "sdfxs"
+  ],
+  "status": "AUDIT_SOURCE_READY"
+}

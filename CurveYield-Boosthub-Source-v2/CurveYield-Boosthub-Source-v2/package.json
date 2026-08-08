@@ -1,0 +1,13 @@
+{
+  "name": "curveyield-boosthub-frontend-v11",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "node --test tests/unit/*.test.mjs",
+    "test:syntax": "node --check src-v11/app.js && for f in src-v11/*.js; do node --check \"$f\"; done",
+    "test": "npm run test:syntax && npm run test:unit",
+    "test:browser": "PYTHONUNBUFFERED=1 python3 tests/e2e/browser-qa-v3.py && PYTHONUNBUFFERED=1 python3 tests/e2e/frontend-layout-v8.py && PYTHONUNBUFFERED=1 python3 tests/e2e/vault-targets-v8.py && PYTHONUNBUFFERED=1 python3 tests/e2e/capture-contract-summary-v8.py && PYTHONUNBUFFERED=1 python3 tests/e2e/sdfxs-xchain-v8.py && PYTHONUNBUFFERED=1 python3 tests/e2e/history-indexer-v11.py",
+    "test:all": "npm run test && npm run test:browser",
+    "test:offline-manual": "PYTHONUNBUFFERED=1 python3 tests/e2e/browser-qa-offline-manual-v3.py"
+  }
+}

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f7f5" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <title>CurveYield BoostHub</title>
+    <meta name="description" content="CurveYield BoostHub staking and compounding vault interface for supported StakeDAO liquid lockers." />
+    <link rel="icon" href="./assets/brand/curveyield-white-logo.png" />
+    <link rel="stylesheet" href="./styles-v11.css" />
+  </head>
+  <body>
+    <aside class="app-sidebar" aria-label="BoostHub sidebar">
+      <a class="sidebar-brand" href="#/" aria-label="CurveYield BoostHub home">
+        <img src="./assets/brand/curveyield-white-logo.png" alt="CurveYield" />
+        <span>CURVEYIELD</span>
+        <small>BOOSTHUB</small>
+      </a>
+      <nav id="siteMenu" class="site-menu" aria-label="BoostHub navigation" hidden></nav>
+      <div id="sidebarSummary" class="sidebar-summary" aria-live="polite"></div>
+      <div class="sidebar-foot"><span>CurveYield DAO</span><span>Non-custodial</span></div>
+    </aside>
+
+    <div class="app-main">
+      <header class="topbar">
+        <div class="mobile-brand">
+          <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false" aria-controls="siteMenu" aria-label="Open navigation menu">
+            <span></span><span></span><span></span>
+          </button>
+          <a class="brand-wordmark" href="#/">BoostHub</a>
+        </div>
+        <div class="wallet-cluster">
+          <span id="networkIndicator" class="network-indicator" data-state="disconnected">No wallet</span>
+          <span id="offlineIndicator" class="offline-indicator" hidden>Connection Offline</span>
+          <button id="connectWallet" class="connect-btn" type="button"><span class="wallet-glyph" aria-hidden="true">▣</span><span>Connect Wallet</span></button>
+        </div>
+      </header>
+
+      <main id="app" class="app-shell"></main>
+
+      <footer class="footer">
+        <span class="footer-brand"><img src="./assets/brand/curveyield-white-logo.png" alt="" />CurveYield</span>
+        <span>Copyright © 2026 CurveYield DAO · BoostHub v11</span>
+      </footer>
+    </div>
+
+    <div id="statusRegion" class="sr-only" aria-live="polite"></div>
+    <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+    <div id="confirmationModal" class="modal-backdrop" hidden></div>
+    <div id="walletModal" class="modal-backdrop" hidden></div>
+
+    <script src="./vendor/ethers.umd.min.js"></script>
+    <script type="module" src="./src-v11/app.js"></script>
+  </body>
+</html>

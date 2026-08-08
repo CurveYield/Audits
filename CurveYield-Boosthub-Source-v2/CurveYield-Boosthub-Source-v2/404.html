@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Redirecting to CurveYield BoostHub</title>
+  <script>
+    (function redirectIntoDeploymentBase() {
+      var path = String(location.pathname || "/");
+      var match = path.match(/^\/(ipfs|ipns)\/([^/]+)(?:\/|$)/i);
+      var base = match ? "/" + match[1].toLowerCase() + "/" + match[2] + "/" : "/";
+      location.replace(String(location.origin || "").replace(/\/$/, "") + base + "#/");
+    }());
+  </script>
+</head>
+<body>
+  <p><a href="./#/">Return to CurveYield BoostHub</a></p>
+</body>
+</html>
