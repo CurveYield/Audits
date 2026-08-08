@@ -1,0 +1,51 @@
+name: Recover exact vlSDT v19 source
+on:
+  push:
+    branches: [audit/vlsdt-v19-route-6-v1]
+    paths: ['.source-recovery/v19/REQUEST-v1.json']
+permissions:
+  contents: write
+concurrency:
+  group: recover-vlsdt-v19-source
+  cancel-in-progress: false
+jobs:
+  recover-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BRANCH: audit/vlsdt-v19-route-6-v1
+      RECOVERY_ROOT: .source-recovery/v19
+      STEM: CurveYield-vlSDT-v19-router-claim-fixed-minimal-marketplace-route(2)
+      ZIP_NAME: CurveYield-vlSDT-v19-router-claim-fixed-minimal-marketplace-route(2).zip
+      ZIP_SIZE: '725591'
+      ZIP_SHA256: cd331a1d9c886dc68cf4a4167bdf3e93e1085ab0263cc81aec77b28754c01cae
+      ZIP_GIT_BLOB_SHA: c435805e498c0bf38a9d8bcc18457aa1ed67e9c5
+      FILE_COUNT: '228'
+    steps:
+      - name: Fetch exact recovery request
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git init .
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "$BRANCH"
+          git checkout -B "$BRANCH" FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Reconstruct, validate and stage exact source
+        run: python3 "$RECOVERY_ROOT/recover_source_v1.py"
+      - name: Verify reconstructed Git blob identity
+        run: |
+          set -euo pipefail
+          test "$(git hash-object "$STEM/(Z) $STEM/$ZIP_NAME")" = "$ZIP_GIT_BLOB_SHA"
+      - name: Commit repository-native exact source atomically
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'CurveYield Deep Assurance Controller'
+          git config user.email 'deep-assurance@users.noreply.github.com'
+          rm -rf "$RECOVERY_ROOT/chunks" "$RECOVERY_ROOT/REQUEST-v1.json"
+          git add -- "$STEM" "$RECOVERY_ROOT"
+          git commit -m 'audit: stage exact vlSDT v19 source bytes v1'
+          git push origin "HEAD:$BRANCH"
